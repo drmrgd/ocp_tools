@@ -15,13 +15,14 @@ use Data::Dump;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v0.6.0_080814";
+my $version = "v0.7.0_082214";
 my $description = <<"EOT";
 Using samtools idxstats, print out a table comparing read depth per chromosome for a set of BAM files.
 EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <bam_file(s)>
+    -c, --csv       Generate a CSV output instead of plain table
     -o, --output    Send output to custom file.  Default is STDOUT.
     -v, --version   Version information
     -h, --help      Print this help information
@@ -30,8 +31,10 @@ EOT
 my $help;
 my $ver_info;
 my $outfile;
+my $csv_out;
 
-GetOptions( "output|o=s"    => \$outfile,
+GetOptions( "csv|c"         => \$csv_out,
+            "output|o=s"    => \$outfile,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -78,7 +81,7 @@ my @samples;
 
 for my $bam_file ( @bam_files ) {
     # split it all out...useful at some point later?
-    my ($sample, $type, $site, $barcode) = $bam_file =~ /(.*?)_([DR]NA)_(\w+)_(IonXpress_\d+)/;
+    my ($sample, $type, $site, $barcode) = $bam_file =~ /(.*?)[-_]([DR]NA)_(\w+)_(IonXpress_\d+)/;
     $site = uc($site);
 
     if ( DEBUG ) {
@@ -101,23 +104,37 @@ my $col_format= "  %-13s" x scalar(@samples);
 for my $site ( keys %data ) {
     my %sample_totals;
     print  {$out_fh} "::: Reads by Chromosome for $site :::\n";
-    printf {$out_fh} "      $col_format\n", @samples;
+    if ( $csv_out ) {
+        print {$out_fh} join( ',', @samples ), "\n";
+    } else {
+        printf {$out_fh} "      $col_format\n", @samples;
+    }
 
     for my $chr ( sort { versioncmp( $a, $b ) } keys %{$data{$site}} ) { 
         my @chr_counts;;
-        print {$out_fh} "$chr\t";
+        #print {$out_fh} "$chr\t";
+        ($csv_out) ? print {$out_fh} "$chr," : print {$out_fh} "$chr\t";
         for my $elem ( @{$data{$site}->{$chr}} ) {
             for my $sample ( keys %$elem ) {
                 push( @chr_counts, $$elem{$sample} );
                 push( @{$sample_totals{$sample}}, $$elem{$sample} );
             }
         }
-        printf {$out_fh} "$col_format\n", @chr_counts; 
+        if ( $csv_out ) {
+            print {$out_fh} join( ',', @chr_counts ), "\n";
+        } else {
+            printf {$out_fh} "$col_format\n", @chr_counts; 
+        }
     }
-    print {$out_fh} "Total:    ";
+    #print {$out_fh} "Total:    ";
+    ($csv_out) ? print {$out_fh} "Total:" : print {$out_fh} "Total:    ";
     for my $sample (@samples) {
         my $total = sum(@{$sample_totals{$sample}});
-        printf {$out_fh} "%-13s  ", $total;
+        if ( $csv_out ) {
+            print {$out_fh} ",$total";
+        } else {
+            printf {$out_fh} "%-13s  ", $total;
+        }
     }
     print "\n";
 }
