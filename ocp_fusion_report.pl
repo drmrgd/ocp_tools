@@ -11,7 +11,7 @@ use File::Basename;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.5.0_080414";
+my $version = "v0.6.0_082614";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -101,6 +101,7 @@ $fwidth += 4; # Give a little extra padding
 
 select $out_fh;
 for my $sample ( sort keys %results ) {
+    my $count;
     printf "%-20s\n", $sample;
     printf "\t%-${fwidth}s%-15s %-8s %-8s\n", "Fusion", "Gene", "Count", "Annot";
     for my $fusion ( sort keys %{$results{$sample}} ) {
@@ -111,5 +112,8 @@ for my $sample ( sort keys %results ) {
         next if ( ${$results{$sample}->{$fusion}}[1] == 0 && ! $ref_calls );
         printf "\t%-${fwidth}s", $fname;
         printf "%-15s %-8s %-8s\n", @{$results{$sample}->{$fusion}};
+        $count++;
     }
+    print "\t\t\t<<< No Fusions Detected >>>\n" unless $count;
+    print "\n";
 }
