@@ -1,6 +1,8 @@
 #!/usr/bin/perl
-# Print out Novel fusions as found in the OCP Fusion Pipeline.  Will expand later, but for now just 
-# print out the novel ones.  Can add some filters and stuff later if wanted.
+# Generate a fusion report from VCF files derived from and IR analysis.  Can output either annotated
+# fusions only or both annotated and novel fusions.  Can also choose to output ref calls in addtion
+# to variant calls to make a more complete report.
+#
 # 6/9/2014 - D Sims
 #######################################################################################################
 use warnings;
@@ -11,7 +13,7 @@ use File::Basename;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.6.0_082614";
+my $version = "v0.8.0_091514";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -82,38 +84,51 @@ for my $input_file ( @files ) {
     while (<$in_fh>) {
         next if /^#/;
         my @data = split;
-        my ( $count, $gene, $annot );
         if ( grep { /Fusion/ } @data ) {
-            my $fusion = $data[2];
-            ($count, $gene) = map { /READ_COUNT=(\d+);GENE_NAME=(.*?);/ } @data;
-            # TODO: Not sure this is accurate.  how are novel fusions reported.  Are those without IDs novel?
-            #( grep { /NOVEL/ } @data ) ? ($annot = "NOVEL") : ( ($annot) = map { /ANNOTATION=(.*?);FUNC/ } @data );
-            ( ! grep { /ANNOTATION/ } @data ) ? ($annot = "NOVEL") : ( ($annot) = map { /ANNOTATION=(.*?);FUNC/ } @data );
-            $fwidth = length($fusion) if ( length($fusion) > $fwidth );
-            $results{$name}->{$fusion} = [$gene,$count,$annot];
+            my ( $fname, $felem ) = $data[2] =~ /(.*?)_([12])$/;
+            my ($count, $gene) = map { /READ_COUNT=(\d+);GENE_NAME=(.*?);/ } @data;
+
+            # Filter out ref calls if we don't want to view them
+            if ( $count == 0 ) { next unless ( $ref_calls ) }
+
+            my ($annot) = map { /ANNOTATION=(.*);FUNC/ } @data;
+            $annot //= 'NOVEL';
+            my $fid = join( '|', $fname, $annot );
+
+            if ( $felem == 2 ) {
+                $results{$name}->{$fid}->{'DRIVER'} = [$gene, $count];
+            } else {
+                $results{$name}->{$fid}->{'PARTNER'} = [$gene, $count];
+            }
+
+            # Get dynamic field width for fusion ID for the final output table
+            $fwidth = (length($fname)+4) if ( length($fname) > $fwidth );
         }
     }
+    # At least generate a hash entry for a sample with no fusions for the final output table below
+    if ( ! $results{$name} ) {
+        $results{$name} = undef;
+    }
 }
+
 #dd \%results;
 #exit;
 
-$fwidth += 4; # Give a little extra padding
-
+# Generate and print out the final results table(s)
 select $out_fh;
 for my $sample ( sort keys %results ) {
-    my $count;
-    printf "%-20s\n", $sample;
-    printf "\t%-${fwidth}s%-15s %-8s %-8s\n", "Fusion", "Gene", "Count", "Annot";
-    for my $fusion ( sort keys %{$results{$sample}} ) {
-        (my $fname = $fusion) =~ s/(.*?\.(:?\S+))\..*_\d+$/$1/;
-        if ( ! $novel ) {
-            next if ( ${$results{$sample}->{$fusion}}[2] eq 'NOVEL' );
+    print "::: Fusions in $sample :::\n\n";
+    if ( $results{$sample} ) {
+        printf "%-${fwidth}s %12s %24s\n", ' ', 'Driver', 'Partner'; 
+        printf "%-${fwidth}s%-15s %-8s %-15s %-8s %-8s\n", qw( Fusion Gene Count Gene Count Annot );
+        for my $fusion ( sort keys %{$results{$sample}} ) {
+            my ($fus_id, $annot) = split( /\|/, $fusion );
+            next if ( $annot eq 'NOVEL' && ! $novel );
+            printf "%-${fwidth}s", $fus_id;
+            printf "%-15s %-8s %-15s %-8s %-8s\n", @{$results{$sample}->{$fusion}->{'DRIVER'}}, @{$results{$sample}->{$fusion}->{'PARTNER'}}, $annot;
         }
-        next if ( ${$results{$sample}->{$fusion}}[1] == 0 && ! $ref_calls );
-        printf "\t%-${fwidth}s", $fname;
-        printf "%-15s %-8s %-8s\n", @{$results{$sample}->{$fusion}};
-        $count++;
+        print "\n";
+    } else {
+        print "\t\t\t<<< No Fusions Detected >>>\n\n";
     }
-    print "\t\t\t<<< No Fusions Detected >>>\n" unless $count;
-    print "\n";
 }
