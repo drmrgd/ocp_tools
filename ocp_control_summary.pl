@@ -9,7 +9,7 @@ use List::Util 'max';
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.7.0_001514";
+my $version = "v0.8.0_091814";
 my $description = <<"EOT";
 Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR.  Will 
 report both the internal expression control data and the 5'3'Assay data.  
@@ -28,9 +28,9 @@ my $five_to_three;
 my $outfile;
 
 GetOptions( 
-    "output=s"   => \$outfile,
-    "help"       => \$help,
-    "version"    => \$ver_info,
+    "output|o=s"   => \$outfile,
+    "help|h"       => \$help,
+    "version|v"    => \$ver_info,
 );
 
 sub help { 
