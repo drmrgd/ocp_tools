@@ -12,7 +12,7 @@ use Sort::Versions;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.2.0_092014";
+my $version = "v0.3.0_092014";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -109,8 +109,8 @@ for my $input_file (@vcfs) {
 
 # Set up for printing output
 my @outfields = qw( END LEN NUMTILES RAW_CN REF_CN CN HS );
-my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CN );
-my $format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s\n";
+my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN );
+my $format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s\n";
 
 select $out_fh;
 
@@ -138,7 +138,7 @@ for my $sample ( keys %cnv_data ) {
         }
         $count++;
 
-        printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $cn;
+        printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn;
     }
     unless ( defined $count ) {
         print ">>> No CNVs found with the applied filters! <<<\n";
