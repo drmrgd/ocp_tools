@@ -9,10 +9,11 @@ use autodie;
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
 use Sort::Versions;
+use JSON -support_by_pp;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.4.0_092114";
+my $version = "v0.6.0_092314";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -25,6 +26,7 @@ USAGE: $scriptname [options] <VCF_file(s)>
     -c, --copies      Only print CNVs with at least this copy number 
     -g, --gene        Print out results for this gene only
     -t, --tiles       Only print out results for CNVs with at least this many tiles.
+    -a, --annot       Only print CNVs with Oncomine Annotations.
 
     -o, --output      Send output to custom file.  Default is STDOUT.
     -v, --version     Version information
@@ -38,11 +40,13 @@ my $novel;
 my $threshold;
 my $geneid;
 my $tiles;
+my $annot;
 
 GetOptions( "novel|n"       => \$novel,
-            "copies|c=i" => \$threshold,
+            "copies|c=i"    => \$threshold,
             "gene|g=s"      => \$geneid,
             "tiles|t=i"     => \$tiles,
+            "annot|a"       => \$annot,
             "output|o=s"    => \$outfile,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
@@ -80,27 +84,45 @@ if ( $outfile ) {
 my %cnv_data;
 my @vcfs = @ARGV;
 for my $input_file (@vcfs) {
-    my $sample_name;
+    my ($sample_name, $gender, $mapd, $cellularity);
+
     open( my $vcf_fh, "<", $input_file );
     while (<$vcf_fh>) {
-        next if /^##/;
+        if ( /^##/ ) {
+            if ( $_ =~ /sampleGender=(\w+)/ ) {
+                $gender = $1;
+                next;
+            }
+            elsif ( $_ =~ /mapd=(\d\.\d+)/ ) {
+                $mapd = $1;
+                next;
+            }
+            elsif ( $_ =~ /CellularityAsAFractionBetween0-1=(.*)$/ ) {
+                $cellularity = $1;
+                next;
+            }
+            else {
+                next;
+            }
+        } 
+
         my @data = split;
         if ( $data[0] =~ /^#/ ) {
             $sample_name = $data[-1];
             next;
         }
-        next unless $data[4] eq '<CNV>';
-        if ( $data[4] eq '<CNV>' ) {
-            my $varid = join( ':', @data[0..3] );
-            
-            # Kludgy, but need to deal with HS field; not like others!
-            $data[7] =~ s/HS/HS=Yes/;
-            my @format = split( /;/, $data[7] );
-            my ($cn) = $data[9] =~ /:([^:]+)$/;
-            push( @format, "CN=$cn" );
 
-            %{$cnv_data{$sample_name}->{$varid}} = map { split /=/ } @format;
-        }
+        next unless $data[4] eq '<CNV>';
+        my $varid = join( ':', @data[0..3] );
+        
+        # Kludgy, but need to deal with HS field; not like others!
+        $data[7] =~ s/HS/HS=Yes/;
+        my @format = split( /;/, $data[7] );
+        my ($cn) = $data[9] =~ /:([^:]+)$/;
+        push( @format, "CN=$cn" );
+
+        #%{$cnv_data{$sample_name}->{$varid}} = map { split /=/ } @format;
+        %{$cnv_data{join( ':', $sample_name, $gender, $mapd, $cellularity )}->{$varid}} = map { split /=/ } @format;
     }
 }
 
@@ -108,22 +130,23 @@ for my $input_file (@vcfs) {
 #exit;
 
 # Set up for printing output
-my @outfields = qw( END LEN NUMTILES RAW_CN REF_CN CN HS );
-my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN );
-my $format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s\n";
+my @outfields = qw( END LEN NUMTILES RAW_CN REF_CN CN HS FUNC );
+my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN Annot );
+my $format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s\n";
 
 select $out_fh;
 
 # Print out each sample's data
 for my $sample ( keys %cnv_data ) {
+    my ($id, $gender, $mapd, $cell) = split( /:/, $sample );
     my $count;
-    print "::: CNVs Found in $sample :::\n";
+    print "::: CNVs Found in $id (Gender: $gender, Cellularity: $cell, MAPD: $mapd) :::\n";
     printf $format, @header;
 
     for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$cnv_data{$sample}} ) {
         my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(\d\.\d+),0\.95:(\d\.\d+)/;
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
-        my ($end, $length, $numtiles, $raw_cn, $ref_cn, $cn, $hs) = map { $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
+        my ($end, $length, $numtiles, $raw_cn, $ref_cn, $cn, $hs, $func) = map { $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
 
         # Filter data
         next if ( ! $novel && ( $gene eq '.' || ! defined $hs ) );
@@ -136,16 +159,32 @@ for my $sample ( keys %cnv_data ) {
         if ( $geneid ) {
             next unless ( $gene eq $geneid );
         }
-        $count++;
 
         # Need to add this to fix null 5% and 95% CI values if they don't exist
         $ci_5 //= 0;
         $ci_95 //= 0;
 
-        printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn;
+        # Get OVAT Annot Data
+        my ($gene_class, $variant_class);
+        if ( $func =~ /oncomine/ ) {
+            my $json_annot = JSON->new->allow_singlequote->decode($func);
+            my $parsed_annot = $$json_annot[0];
+            $gene_class = $$parsed_annot{'oncomineGeneClass'};
+            $variant_class = $$parsed_annot{'oncomineVariantClass'};
+        } else {
+            $gene_class = $variant_class = '---';
+        }
+
+        # Filter out non-oncomine CNVs
+        if ( $annot ) {
+            next unless $gene_class ne '---';
+        }
+
+        printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class;
+        $count++;
     }
     unless ( defined $count ) {
-        print ">>> No CNVs found with the applied filters! <<<\n";
+        print "\t\t>>> No CNVs found with the applied filters! <<<\n";
     }
     print "\n";
 }
