@@ -13,7 +13,7 @@ use JSON -support_by_pp;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.6.0_092314";
+my $version = "v0.7.0_092414";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -144,9 +144,15 @@ for my $sample ( keys %cnv_data ) {
     printf $format, @header;
 
     for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$cnv_data{$sample}} ) {
-        my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(\d\.\d+),0\.95:(\d\.\d+)/;
+        #my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(\d\.\d+),0\.95:(\d\.\d+)/;
+        my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/;
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
         my ($end, $length, $numtiles, $raw_cn, $ref_cn, $cn, $hs, $func) = map { $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
+
+        #print "raw: $cnv_data{$sample}->{$cnv}->{'CI'}\n";
+        #print "5% CI:   $ci_5\n";
+        #print "95% CI:  $ci_95\n";
+        #exit;
 
         # Filter data
         next if ( ! $novel && ( $gene eq '.' || ! defined $hs ) );
