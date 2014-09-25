@@ -9,7 +9,7 @@ use List::Util 'max';
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.8.0_091814";
+my $version = "v0.8.1_092514";
 my $description = <<"EOT";
 Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR.  Will 
 report both the internal expression control data and the 5'3'Assay data.  
@@ -79,6 +79,12 @@ for my $input_file ( @files ) {
             my ($gene, $count, $ratio) = map { /GENE_NAME=(.*?);READ_COUNT=(\d+,\d+);5P_3P_ASSAYS=(.*?);/ } @data;
             $parsed_data{fptp}->{"${gene}_5p3p"} = [$count,sprintf("%.4g", $ratio)];
         }
+    }
+
+    # If no data collected, this might be a DNA only sample and not run through fusion pipeline
+    if ( ! %parsed_data ) {
+        print "ERROR: No control data found in the VCF file. Is this data from an RNA sample run through the fusion pipeline?\n";
+        exit 1;
     }
 
     # Convert zeros in output to '---' to make the table a little cleaner
