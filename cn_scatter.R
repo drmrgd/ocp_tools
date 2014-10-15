@@ -24,7 +24,7 @@ cn_data <- data.frame( read.table( in_fh, header=TRUE ) )
 plot <- ggplot( cn_data, aes( x=Gene, y=CN )) +
         geom_point() +
         geom_hline( aes( yintercept = 2 ), linetype = "dashed", width = 0.3 ) +
-        geom_hline( aes( yintercept = c(1,4)), width = 0.3 ) +
+        geom_hline( yintercept = c(1,4), width = 0.3 ) +
         geom_errorbar( data = cn_data, aes( ymin = CI_05, ymax = CI_95 )) +
         ggtitle( paste(gtitle, "\n", elems) ) + 
         theme_bw() +
@@ -32,4 +32,3 @@ plot <- ggplot( cn_data, aes( x=Gene, y=CN )) +
 
 filename <- gsub( 'txt', 'pdf', input_file )
 ggsave( plot = plot, file = filename )
-#plot
