@@ -13,7 +13,7 @@ use JSON -support_by_pp;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.8.0_101714";
+my $version = "v0.8.1_102414";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -144,7 +144,7 @@ for my $sample ( keys %cnv_data ) {
     printf $format, @header;
 
     for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$cnv_data{$sample}} ) {
-        my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(\d\.\d+),0\.95:(\d\.\d+)/;
+        my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(\d+\.\d+),0\.95:(\d+\.\d+)/;
         # Seems to be a bug in the same the CI are reported for deletions.  Solution correctly reports the value
         # in the VCF, but it's not so informative.  This will give a better set of data.
         #my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/; 
@@ -160,6 +160,8 @@ for my $sample ( keys %cnv_data ) {
             next unless ( $numtiles >= $tiles );
         }
         if ( $geneid ) {
+            # Allow for case insensitive searching...I'm too lazy for the shift key!
+            $geneid =~ tr/a-z/A-Z/;
             next unless ( $gene eq $geneid );
         }
 
