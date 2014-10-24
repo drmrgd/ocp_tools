@@ -83,7 +83,7 @@ for my $input_file ( @files ) {
 
     # If no data collected, this might be a DNA only sample and not run through fusion pipeline
     if ( ! %parsed_data ) {
-        print "ERROR: No control data found in the VCF file. Is this data from an RNA sample run through the fusion pipeline?\n";
+        print "ERROR: No control data found in the VCF file '$input_file'. Is this data from an RNA sample run through the fusion pipeline?\n";
         exit 1;
     }
 
