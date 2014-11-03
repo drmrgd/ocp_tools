@@ -9,14 +9,15 @@ use List::Util 'max';
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.8.1_092514";
+my $version = "v0.9.0_110314";
 my $description = <<"EOT";
-Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR.  Will 
+Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR. Can
 report both the internal expression control data and the 5'3'Assay data.  
 EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <vcf_file(s)>
+    -F, --FP        Output the 5'3' Assay data.
     -o, --output    Write output to file <default is STDOUT>
     -v, --version   Display version information
     -h, --help      Display this help text
@@ -28,6 +29,7 @@ my $five_to_three;
 my $outfile;
 
 GetOptions( 
+    "FP|F"         => \$five_to_three,
     "output|o=s"   => \$outfile,
     "help|h"       => \$help,
     "version|v"    => \$ver_info,
@@ -62,11 +64,10 @@ if ( $outfile ) {
 
 my @controls;
 for my $input_file ( @files ) {
-    (my $name = $input_file) =~ s/(:?_Fusion_filtered)?\.vcf$//i;
+    (my $name = $input_file) =~ s/\.vcf//;
     open( my $in_fh, "<", $input_file ) || die "Can't open the file '$input_file' for reading: $!";
     my %parsed_data;
     while (<$in_fh>) {
-        #next if ( /^#/ || /READ_COUNT=0/ );
         next if /^#/;
         if ( /ExprControl/ ) {
             my @data = split;
@@ -109,12 +110,15 @@ my $top_pad = ($width+54);
 # Create header
 select $out_fh;
 my $epad = "%-10s" x scalar(@expr_controls);
-my $fpad = "%-25s " x scalar(@fp_controls);
-my $sub_header= (sprintf("%-12s  %-12s", 'Counts', 'Imb')) x 4;
+my ($fpad, $sub_header);
+if ($five_to_three) {
+    $fpad = "%-25s " x scalar(@fp_controls);
+    $sub_header= (sprintf("%-12s  %-12s", 'Counts', 'Imb')) x 4;
+}
 
-printf "%${top_pad}s $fpad\n", '', @fp_controls;
+printf "%${top_pad}s $fpad\n", '', @fp_controls if $five_to_three;
 printf "%-${width}s $epad", 'Samples', @expr_controls;
-print "$sub_header\n";
+($five_to_three) ? print "$sub_header\n" : print "\n";
 
 # Print out all control data;
 for my $sample ( sort keys %results ) {
@@ -122,9 +126,11 @@ for my $sample ( sort keys %results ) {
     for my $control ( @expr_controls ) {
         printf "%-10s", $results{$sample}->{expr}{$control};
     }
-    for my $control ( @fp_controls ) {
-        my ($count, $ratio) = @{$results{$sample}->{fptp}{$control}};
-        printf "%-13s %-12s", $count, $ratio;
+    if ( $five_to_three ) {
+        for my $control ( @fp_controls ) {
+            my ($count, $ratio) = @{$results{$sample}->{fptp}{$control}};
+            printf "%-13s %-12s", $count, $ratio;
+        }
     }
     print "\n";
 }
