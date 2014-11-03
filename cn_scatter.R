@@ -1,3 +1,4 @@
+#!/usr/bin/Rscript
 # Generate a linear scatterplot of copy number data for each gene
 # 9/25/2014 - D Sims
 library(ggplot2)
