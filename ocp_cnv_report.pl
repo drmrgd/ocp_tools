@@ -13,7 +13,7 @@ use JSON -support_by_pp;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.8.1_102414";
+my $version = "v0.8.2_010515";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -171,7 +171,7 @@ for my $sample ( keys %cnv_data ) {
 
         # Get OVAT Annot Data
         my ($gene_class, $variant_class);
-        if ( $func =~ /oncomine/ ) {
+        if ( $func && $func =~ /oncomine/ ) {
             my $json_annot = JSON->new->allow_singlequote->decode($func);
             my $parsed_annot = $$json_annot[0];
             $gene_class = $$parsed_annot{'oncomineGeneClass'};
