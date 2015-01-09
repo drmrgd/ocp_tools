@@ -13,7 +13,7 @@ use File::Basename;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.8.0_091514";
+my $version = "v0.8.1_010815";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -21,8 +21,8 @@ EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <vcf_file(s)>
-    -r, --ref       Include reference variants too (DEFAULT = off)
-    -n, --novel     Include 'Novel' fusions in the output (DEFAULT = off)
+    -r, --ref       Include reference variants too (DEFAULT: off)
+    -n, --novel     Include 'Novel' fusions in the output (DEFAULT: on)
     -o, --output    Write output to file <default =  STDOUT>
     -v, --version   Display version information
     -h, --help      Display this help text
@@ -30,7 +30,7 @@ EOT
 
 my $help;
 my $ver_info;
-my $novel;
+my $novel=1;
 my $outfile;
 my $ref_calls;
 
