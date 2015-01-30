@@ -9,7 +9,7 @@ use List::Util 'max';
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v0.9.0_110314";
+my $version = "v1.0.0_012915";
 my $description = <<"EOT";
 Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR. Can
 report both the internal expression control data and the 5'3'Assay data.  
@@ -96,6 +96,14 @@ for my $input_file ( @files ) {
     }
     
     for my $control ( @fp_controls ) {
+        #if ($parsed_data{fptp}->{$control}[0] eq '0,0') {
+            #($results{$name}->{fptp}{$control} = [' ---', ' ---']);
+        #} else {
+            #(my $fp_data = $parsed_data{fptp}->{$control}[0]) =~ s/,/:/;
+            #print $fp_data, "\n";
+            #$results{$name}->{fptp}{$control} = $fp_data;
+        #}
+
         ($parsed_data{fptp}->{$control}[0] eq '0,0') ? 
         ($results{$name}->{fptp}{$control} = [' ---', ' ---']) : 
         ($results{$name}->{fptp}{$control} = $parsed_data{fptp}->{$control} );
@@ -129,6 +137,8 @@ for my $sample ( sort keys %results ) {
     if ( $five_to_three ) {
         for my $control ( @fp_controls ) {
             my ($count, $ratio) = @{$results{$sample}->{fptp}{$control}};
+            $count =~ s/,/ : /;
+            #$count =~ s/,/ \/ /;
             printf "%-13s %-12s", $count, $ratio;
         }
     }
