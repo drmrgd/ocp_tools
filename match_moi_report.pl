@@ -20,7 +20,7 @@ use Sort::Versions;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v1.0.0_022015";
+my $version = "v1.0.1_022015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires the use of `convert_vcf.py` from 
 ThermoFisher to run as it does the bulk of the file parsing.
@@ -266,7 +266,7 @@ sub proc_cnv {
 
     if ( $$variant_info{'FORMAT.1.CN'} >= 7 ) { 
         my ($ci_05, $ci_95) = $$variant_info{'INFO...CI'} =~ /0\.05:(.*?),0\.95:(.*)/;
-        $cnv_data{$$variant_info{'FUNC1.gene'}} = [$$variant_info{'CHROM'}, $$variant_info{'INFO.1.NUMTILES'}, $$variant_info{'FORMAT.1.CN'}, $ci_05, $ci_95];
+        $cnv_data{$$variant_info{'FUNC1.gene'}} = [$$variant_info{'CHROM'}, $$variant_info{'INFO.1.NUMTILES'}, $ci_05, $$variant_info{'FORMAT.1.CN'}, $ci_95];
     }
     return;
 }
