@@ -20,7 +20,7 @@ use Sort::Versions;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v1.0.2_022015";
+my $version = "v1.1.0_022015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires the use of `convert_vcf.py` from 
 ThermoFisher to run as it does the bulk of the file parsing.
@@ -28,6 +28,8 @@ EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
+    -f, --freq      Don't report SNVs or Indels below this allele frequency as a decimal (1 = 100%; 0.1 = 10%). DEFAULT: 5%
+    -c, --cn        Don't report CNVs below this copy number threshold.  DEFAULT: 7
     -o, --output    Send output to custom file.  Default is STDOUT.
     -v, --version   Version information
     -h, --help      Print this help information
@@ -36,8 +38,12 @@ EOT
 my $help;
 my $ver_info;
 my $outfile;
+my $freq_cutoff = 0.05;
+my $cn_cutoff = 7;
 
-GetOptions( "output|o=s"    => \$outfile,
+GetOptions( "freq|f=d"      => \$freq_cutoff,
+            "cn|c=d"        => \$cn_cutoff,
+            "output|o=s"    => \$outfile,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -185,7 +191,7 @@ sub proc_snv_indel {
     return unless ( $$variant_info{'FUNC1.location'} eq 'exonic' || $$variant_info{'FUNC1.function'} eq 'synonymous' );
     my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} ); 
 
-    if ( $$variant_info{'INFO.A.AF'} > 0 ) {
+    if ( $$variant_info{'INFO.A.AF'} > $freq_cutoff ) {
         # Anything that's a hotspot
         if ( $$variant_info{'INFO...OID'} ne '.' ) {
             # bin NOCALLs for now
@@ -264,7 +270,7 @@ sub proc_fusion {
 sub proc_cnv {
     my $variant_info = shift;
 
-    if ( $$variant_info{'FORMAT.1.CN'} >= 7 ) { 
+    if ( $$variant_info{'FORMAT.1.CN'} >= $cn_cutoff ) { 
         my ($ci_05, $ci_95) = $$variant_info{'INFO...CI'} =~ /0\.05:(.*?),0\.95:(.*)/;
         $cnv_data{$$variant_info{'FUNC1.gene'}} = [$$variant_info{'CHROM'}, $$variant_info{'INFO.1.NUMTILES'}, $ci_05, $$variant_info{'FORMAT.1.CN'}, $ci_95];
     }
