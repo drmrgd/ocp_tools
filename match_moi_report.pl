@@ -20,7 +20,7 @@ use Sort::Versions;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v1.1.0_022015";
+my $version = "v1.1.1_022015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires the use of `convert_vcf.py` from 
 ThermoFisher to run as it does the bulk of the file parsing.
@@ -41,8 +41,8 @@ my $outfile;
 my $freq_cutoff = 0.05;
 my $cn_cutoff = 7;
 
-GetOptions( "freq|f=d"      => \$freq_cutoff,
-            "cn|c=d"        => \$cn_cutoff,
+GetOptions( "freq|f=i"      => \$freq_cutoff,
+            "cn|c=i"        => \$cn_cutoff,
             "output|o=s"    => \$outfile,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
@@ -191,7 +191,7 @@ sub proc_snv_indel {
     return unless ( $$variant_info{'FUNC1.location'} eq 'exonic' || $$variant_info{'FUNC1.function'} eq 'synonymous' );
     my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} ); 
 
-    if ( $$variant_info{'INFO.A.AF'} > $freq_cutoff ) {
+    if ( $$variant_info{'INFO.A.AF'} >= $freq_cutoff ) {
         # Anything that's a hotspot
         if ( $$variant_info{'INFO...OID'} ne '.' ) {
             # bin NOCALLs for now
