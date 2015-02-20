@@ -359,6 +359,5 @@ sub gen_report {
     } else {
         print ">>>>  No Reportable CNVs Found in Sample  <<<<\n";
     }
-    print "\n";
     return;
 }
