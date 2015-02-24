@@ -17,10 +17,11 @@ no if $] > 5.018, 'warnings', 'experimental::smartmatch'; # Need to turn of smar
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
 use Sort::Versions;
+use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v1.1.1_022015";
+my $version = "v1.2.0_022415";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires the use of `convert_vcf.py` from 
 ThermoFisher to run as it does the bulk of the file parsing.
@@ -319,7 +320,7 @@ sub gen_report {
 
     select $out_fh;
 
-    print "::: MATCH Reportable SNVs and Indels :::\n";
+    print colored("::: MATCH Reportable SNVs and Indels :::\n", "green on_black");
     ($w1, $w2, $w3) = field_width( $snv_indels, 'snv' );
     my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-10s %-${w3}s %-8s %-10s %-10s %-10s %-14s %-10s %-21s %s\n";
     my @snv_indel_header = qw( Chrom:Pos Ref Alt Filter Filter_Reason VAF TotCov RefCov AltCov VARID Gene oncomineGeneClass oncomineVariantClass );
@@ -329,11 +330,11 @@ sub gen_report {
             printf $snv_indel_format, @{$$snv_indels{$variant}};
         }
     } else {
-        print ">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n";
+        print colored(">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n", "red on_black");
     }
     print "\n";
 
-    print "::: MATCH Reportable Fusions :::\n";
+    print colored("::: MATCH Reportable Fusions :::\n", "green on_black");
     ($w1) = field_width( $fusion_data, 'fusion' );
     my $fusion_format = "%-${w1}s %-12s %-12s %-15s %-15s\n";
     my @fusion_header = qw( Fusion ID Read_Count Driver_Gene Partner_Gene );
@@ -344,11 +345,11 @@ sub gen_report {
             printf $fusion_format, "$fusion.$junct", $id, $fusion_data{$_}->{'COUNT'}, $fusion_data{$_}->{'DRIVER'}, $fusion_data{$_}->{'PARTNER'};
         }
     } else {
-        print ">>>>  No Reportable Fusions found in Sample  <<<<\n";
+        print colored(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
     }
     print "\n";
 
-    print "::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: $mapd) :::\n";
+    print colored("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: $mapd) :::\n", "green on_black");
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
     printf "%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header;
@@ -357,7 +358,7 @@ sub gen_report {
             printf $cnv_format, $cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4];
         }
     } else {
-        print ">>>>  No Reportable CNVs Found in Sample  <<<<\n";
+        print colored(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
     }
     return;
 }
