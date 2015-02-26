@@ -64,7 +64,7 @@ if ( $outfile ) {
 
 my @controls;
 for my $input_file ( @files ) {
-    (my $name = $input_file) =~ s/\.vcf//;
+    (my $name = basename($input_file)) =~ s/\.vcf//;
     open( my $in_fh, "<", $input_file ) || die "Can't open the file '$input_file' for reading: $!";
     my %parsed_data;
     while (<$in_fh>) {
