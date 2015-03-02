@@ -190,9 +190,17 @@ sub proc_snv_indel {
     my $variant_info = shift;
 
     return unless ( $$variant_info{'FUNC1.location'} eq 'exonic' || $$variant_info{'FUNC1.function'} eq 'synonymous' );
-    my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} ); 
+    my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} );
 
-    if ( $$variant_info{'INFO.A.AF'} >= $freq_cutoff ) {
+    # Added to prevent missing long indel assembler calls.
+    my $vaf;
+    if ( $$variant_info{'INFO.A.AF'} eq '.'  ) {
+        $vaf = $$variant_info{'INFO.A.AO'} / ($$variant_info{'INFO.1.RO'} + $$variant_info{'INFO.A.AO'});
+    } else {
+        $vaf = $$variant_info{'INFO.A.AF'};
+    }
+    
+    if ( $vaf >= $freq_cutoff ) {
         # Anything that's a hotspot
         if ( $$variant_info{'INFO...OID'} ne '.' ) {
             # bin NOCALLs for now
