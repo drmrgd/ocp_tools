@@ -21,7 +21,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v1.2.0_022415";
+my $version = "v1.3.0_030515";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires the use of `convert_vcf.py` from 
 ThermoFisher to run as it does the bulk of the file parsing.
@@ -189,6 +189,8 @@ sub proc_snv_indel {
     # Follow rules to generate a list of MOIs and aMOIs
     my $variant_info = shift;
 
+    my @oncomine_vc = qw( Deleterious Hotspot );
+
     # FIXME: location may be unreliable.  Talk to brent or eric
     return if ( $$variant_info{'FUNC1.location'} eq 'intronic' || $$variant_info{'FUNC1.function'} eq 'synonymous' );
     my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} );
@@ -214,7 +216,8 @@ sub proc_snv_indel {
             gen_var_entry( $variant_info, \$id );
         }
         # De Novo TSG frameshift calls
-        elsif ( $$variant_info{'FUNC1.oncomineGeneClass'} ) {
+        #elsif ( $$variant_info{'FUNC1.oncomineGeneClass'} ) {
+        elsif ( grep { $$variant_info{'FUNC1.oncomineVariantClass'} eq $_ } @oncomine_vc ) {
             gen_var_entry( $variant_info, \$id );
         }
         # EGFR nonframeshiftDeletion in Exon 19 rule
@@ -255,9 +258,10 @@ sub gen_var_entry {
     ($$data{'FUNC1.oncomineVariantClass'}) ? ($om_vc = $$data{'FUNC1.oncomineVariantClass'}) : ($om_vc = '---');
 
     # Remove duplicate variant entries that span VCF blocks
-    if ($varid ne '.' && exists $snv_indel_data{$$id}) {
-        delete $snv_indel_data{$$id};
-    } 
+    #if ($varid ne '.' && exists $snv_indel_data{$$id}) {
+
+        #delete $snv_indel_data{$$id};
+    #} 
 
     $snv_indel_data{$$id} = [$coord, $ref, $alt, $filter, $fr, $vaf, $tcov, $rcov, $acov, $varid, $gene, $om_gc, $om_vc];
     return;
