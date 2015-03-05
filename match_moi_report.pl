@@ -189,9 +189,9 @@ sub proc_snv_indel {
     # Follow rules to generate a list of MOIs and aMOIs
     my $variant_info = shift;
 
-    return unless ( $$variant_info{'FUNC1.location'} eq 'exonic' || $$variant_info{'FUNC1.function'} eq 'synonymous' );
+    # FIXME: location may be unreliable.  Talk to brent or eric
+    return if ( $$variant_info{'FUNC1.location'} eq 'intronic' || $$variant_info{'FUNC1.function'} eq 'synonymous' );
     my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} );
-
     # Added to prevent missing long indel assembler calls.
     my $vaf;
     if ( $$variant_info{'INFO.A.AF'} eq '.'  ) {
@@ -201,6 +201,12 @@ sub proc_snv_indel {
     }
     
     if ( $vaf >= $freq_cutoff ) {
+        # Use Routbort coverage cutoff rule
+        # TODO:
+        # Add in the routbort rule
+
+
+
         # Anything that's a hotspot
         if ( $$variant_info{'INFO...OID'} ne '.' ) {
             # bin NOCALLs for now
@@ -264,6 +270,14 @@ sub proc_fusion {
         my ($name, $elem) = $$variant_info{'ID'} =~ /(.*?)_([12])/;
         my ($pair, $junct, $id) = split( /\./, $name );
         $id = 'NOVEL' unless $id;
+
+        # Get rid of Fusions that are below our thresholds
+        if ( $id eq 'DelPositive' ) {
+            return if $$variant_info{'INFO...READ_COUNT'} < 1000;
+        } else {
+            return if $$variant_info{'INFO...READ_COUNT'} < 25;
+        }
+
         my $fid = join( '|', $pair, $junct, $id );
         
         $fusion_data{$fid}->{'COUNT'} = $$variant_info{'INFO...READ_COUNT'};
