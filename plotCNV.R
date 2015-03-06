@@ -1,6 +1,7 @@
 #!/usr/bin/Rscript
 
 file = commandArgs(TRUE)[1]
+correctForTumorContent = (length(commandArgs(TRUE)) > 1)
 
 genepos = c(1,2,3,4,8,9,13,14,15,16,17,18,19,23,24,25,26,27,31,32,33,34,38,39,40,41,45,46,50,51,52,53,54,55,59,60,61,65,66,67,68,69,70,74,75,76,77,81,82,83,84,88,89,90,91,92,96,100,101,105,106,107,108,109,110,111,115,119,120,124,125,126,130,131,135)
 
@@ -15,22 +16,21 @@ rows = readLines(file)
 
 mapd = "N/A"
 for (row in rows) {
-    if (grepl("##mapd=", row)) {
-        mapd = strsplit(row,"=")[[1]][2]
-    }
+	if (grepl("##mapd=", row)) {
+		mapd = strsplit(row,"=")[[1]][2]
+	}
 }
 
 cellularity = "N/A"
 for (row in rows) {
-    if (grepl("##Cellularity", row)) {
-        cellularity = strsplit(row,"=")[[1]][2]
-    }
+	if (grepl("##Cellularity", row)) {
+		cellularity = as.numeric(strsplit(row,"=")[[1]][2])
+	}
 }
 
 
 vals = vector()
 genes = vector()
-boxfills = vector()
 for (row in rows[grepl("<CNV>", rows) & grepl("gene", rows)]) {
 	cols = strsplit(row,";")[[1]]
 	col = cols[grepl("CDF_MAPD", cols)]
@@ -40,17 +40,14 @@ for (row in rows[grepl("<CNV>", rows) & grepl("gene", rows)]) {
 		percentiles = c(percentiles, as.numeric(strsplit(pctval, ":")[[1]][2]))
 	}
 
-	gene = gsub("(.*gene':'(.*)'.*)", "\\2", row)
-	print(gene)
-	if (percentiles[1] > 4 | percentiles[length(percentiles)] < 1) {
-		boxfills = c(boxfills, 'grey48')
-	}
-	else{
-		boxfills = c(boxfills, 'white')
-	}
+	gene = gsub("(.*gene':'([A-Z0-9-]+)'.*)", "\\2", row)
 
-	for (x in percentiles) {
+	for (x in percentiles[2:(length(percentiles) - 1)]) {
 		genes = c(genes, gene)
+		# correct for cellularity:
+		if (correctForTumorContent)  {
+			x = max(0, (x - 2*(1-cellularity)) / cellularity)
+		}
 		vals = c(vals, x)
 	}
 }
@@ -58,11 +55,16 @@ for (row in rows[grepl("<CNV>", rows) & grepl("gene", rows)]) {
 genes = factor(genes, levels=orderedGenes)
 df = data.frame(genes=genes, vals=vals)
 
-fn = paste(gsub("((.*).vcf)", "\\2", file), ".png", sep="")
+if (correctForTumorContent) {
+	fn = paste(gsub("((.*).vcf)", "\\2", file), "_cellularity_corrected.png", sep="")
+} else {
+	fn = paste(gsub("((.*).vcf)", "\\2", file), ".png", sep="")
+}
+
 png(file=fn, width=2000, height=1000)
 par(mai=c(1.5,1.5,2,0.42))
-yrange = range(c(0,6), vals)
-boxplot(vals~genes, data=df, at=genepos, las=2, cex.axis=1.2, cex.lab=2.0, boxlwd = 1, col=boxfills, ylab='Copy Number', ylim=yrange, pin=c(4,8), border=boxColors, lwd=2)
+yrange = range(c(0,max(6, max(vals))), vals)
+boxplot(vals~genes, data=df, at=genepos, las=2, cex.axis=1.2, cex.lab=2.0, boxlwd = 1, ylab='Copy Number', ylim=yrange, pin=c(4,8), border=boxColors, lwd=2)
 
 abline(h = 2, col = "black", lty=2, lwd=2)
 abline(h = 1, col = "blue", lwd=2)
