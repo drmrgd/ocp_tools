@@ -15,7 +15,7 @@ title <- readLines( in_fh, n=1 )
 # Capture elements from the first line to be used later in the graph
 regex <- '(Gender: \\w+), (Cellularity: \\d\\.\\d+), (MAPD: \\d\\.\\d+)'
 elems <- str_extract( title, perl(regex) )
-gtitle <- str_extract( title, perl( '(CNVs Found in [_-\\w]+)') )
+gtitle <- str_extract( title, perl( '(CNVs Found in [-_A-Z0-9]+)') )
 gtitle <- gsub( 'Found in', 'Report for', gtitle )
 
 # Now read the rest of the table into a df
@@ -31,5 +31,6 @@ plot <- ggplot( cn_data, aes( x=Gene, y=CN )) +
         theme_bw() +
         theme( axis.text.x = element_text( size = 6, face = "bold", angle = 90, hjust = 1 ))
 
-filename <- gsub( 'txt', 'pdf', input_file )
+#filename <- gsub( 'txt', 'pdf', input_file )
+filename <- gsub( 'txt', 'png', input_file )
 ggsave( plot = plot, file = filename )
