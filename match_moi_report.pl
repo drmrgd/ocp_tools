@@ -21,7 +21,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v1.3.0_030515";
+my $version = "v2.0.0_040715";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires the use of `convert_vcf.py` from 
 ThermoFisher to run as it does the bulk of the file parsing.
@@ -77,11 +77,12 @@ if ( $outfile ) {
 	$out_fh = \*STDOUT;
 }
 
-#########------------------------------ END ARG Parsing ---------------------------------#########
+########------------------------------ END ARG Parsing ---------------------------------#########
 my $vcf_file = shift;
 my ($gender, $cellularity, $mapd);
 my $variant_data = read_vcf(\$vcf_file );
 
+# Parse TSV file based on variant type and load up a hash of results.
 my (%snv_indel_data, %fusion_data, %cnv_data);
 for my $variant (@$variant_data) {
     my $type = $$variant{'rowtype'};
@@ -93,8 +94,8 @@ for my $variant (@$variant_data) {
     }
 }
 
+# Print out the combined report
 gen_report( \%snv_indel_data, \%fusion_data, \%cnv_data );
-
 
 sub read_vcf {
     # Read in VCF file, proc with 'convert_vcf.py' and load a data struct.
@@ -102,7 +103,8 @@ sub read_vcf {
     (my $converted_vcf = $$input_file) =~ s/vcf$/tsv/;
     my @variant_results;
 
-    # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to read the VCF twice it looks like
+    # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to 
+    # read the VCF twice it looks like
     open( my $vcf_fh, "<", $$input_file );
     while (<$vcf_fh>) {
         if ( /^##/ ) {
@@ -122,17 +124,24 @@ sub read_vcf {
     }
     close $vcf_fh;
 
+    print "Coverting VCF file into TSV file for parsing...\n";
     qx( convert_vcf.py --force -i $$input_file -o $converted_vcf );
+    print "Done!\n";
+
     open( my $fh, "<", $converted_vcf );
-    chomp( my @header = split(/\t/, <$fh>) );
+    chomp(my $header = <$fh>);
+    # for some reason v1.3.1 of vcf_coverter is outputting quotes; remove them!
+    my @header_elems = map { s/"//g; $_ } split(/\t/, $header);
     while (<$fh>) {
+        $_ =~ s/"//g; 
         my %raw_data;
         chomp( my @elems = split(/\t/) );
-        @raw_data{@header} = @elems;
+        @raw_data{@header_elems} = @elems;
         my %filtered = filter_raw_data( \%raw_data );
         push(@variant_results, \%filtered);
     }
     close $fh;
+
     unlink $converted_vcf;
     return \@variant_results;
 }
@@ -188,12 +197,15 @@ sub filter_raw_data {
 sub proc_snv_indel {
     # Follow rules to generate a list of MOIs and aMOIs
     my $variant_info = shift;
-
     my @oncomine_vc = qw( Deleterious Hotspot );
+    my @undesired_locations = qw( unknown intergenic intronic utr_5 utr_3 splicesite_5 splicesite_3 upstream
+                                  downstream intronic_nc ncRNA nonCoding);
 
-    # FIXME: location may be unreliable.  Talk to brent or eric
-    return if ( $$variant_info{'FUNC1.location'} eq 'intronic' || $$variant_info{'FUNC1.function'} eq 'synonymous' );
+    return if ( grep { $$variant_info{'FUNC1.location'} eq $_ } @undesired_locations );
+    return if $$variant_info{'FUNC1.function'} eq 'synonymous';
+
     my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} );
+    
     # Added to prevent missing long indel assembler calls.
     my $vaf;
     if ( $$variant_info{'INFO.A.AF'} eq '.'  ) {
@@ -202,13 +214,22 @@ sub proc_snv_indel {
         $vaf = $$variant_info{'INFO.A.AF'};
     }
     
+    # Get some debugging messages if there's an issue
+    local $SIG{__WARN__} = sub {
+        print "**** Error in parsing line ****\n\n";
+        my $message = shift;
+        print $message;
+        print "variant id  => $id\n";
+        print "vaf         => $vaf\n";
+        dd $variant_info;
+        print "*******************************\n";
+        exit;
+    };
+
+    # Need to define the hash entry or we'll get an issue later on.
+    $$variant_info{'FUNC1.oncomineVariantClass'} //= '---';
+
     if ( $vaf >= $freq_cutoff ) {
-        # Use Routbort coverage cutoff rule
-        # TODO:
-        # Add in the routbort rule
-
-
-
         # Anything that's a hotspot
         if ( $$variant_info{'INFO...OID'} ne '.' ) {
             # bin NOCALLs for now
@@ -216,7 +237,6 @@ sub proc_snv_indel {
             gen_var_entry( $variant_info, \$id );
         }
         # De Novo TSG frameshift calls
-        #elsif ( $$variant_info{'FUNC1.oncomineGeneClass'} ) {
         elsif ( grep { $$variant_info{'FUNC1.oncomineVariantClass'} eq $_ } @oncomine_vc ) {
             gen_var_entry( $variant_info, \$id );
         }
