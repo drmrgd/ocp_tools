@@ -14,6 +14,8 @@ use autodie;
 use feature "switch";
 no if $] > 5.018, 'warnings', 'experimental::smartmatch'; # Need to turn of smartmatch warning, but only if the version of perl is newer
 
+use constant DEBUG => 1;
+
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
 use Sort::Versions;
@@ -21,7 +23,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.0.0_040715";
+my $version = "v2.1.0_040715";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires the use of `convert_vcf.py` from 
 ThermoFisher to run as it does the bulk of the file parsing.
@@ -42,7 +44,7 @@ my $outfile;
 my $freq_cutoff = 0.05;
 my $cn_cutoff = 7;
 
-GetOptions( "freq|f=i"      => \$freq_cutoff,
+GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cn|c=i"        => \$cn_cutoff,
             "output|o=s"    => \$outfile,
             "version|v"     => \$ver_info,
@@ -75,6 +77,15 @@ if ( $outfile ) {
 	open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
 } else {
 	$out_fh = \*STDOUT;
+}
+
+if (DEBUG) {
+    print "======================================  DEBUG  ======================================\n";
+    print "Params as passed into script:\n";
+    print "\tCNV Threshold  => $cn_cutoff\n";
+    print "\tVAF Threshold  => $freq_cutoff\n";
+    print "\tOutput File    => $out_fh\n";
+    print "=====================================================================================\n\n";
 }
 
 ########------------------------------ END ARG Parsing ---------------------------------#########
