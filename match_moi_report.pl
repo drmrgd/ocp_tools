@@ -12,9 +12,10 @@ use warnings;
 use strict;
 use autodie;
 use feature "switch";
-no if $] > 5.018, 'warnings', 'experimental::smartmatch'; # Need to turn of smartmatch warning, but only if the version of perl is newer
+# Need to turn of smartmatch warning, but only if the version of perl is newer
+no if $] > 5.018, 'warnings', 'experimental::smartmatch'; 
 
-use constant DEBUG => 1;
+use constant DEBUG => 0;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
@@ -377,7 +378,7 @@ sub gen_report {
 
     select $out_fh;
 
-    print colored("::: MATCH Reportable SNVs and Indels :::\n", "green on_black");
+    print colored("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
     ($w1, $w2, $w3) = field_width( $snv_indels, 'snv' );
     my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-10s %-${w3}s %-8s %-10s %-10s %-10s %-14s %-10s %-21s %s\n";
     my @snv_indel_header = qw( Chrom:Pos Ref Alt Filter Filter_Reason VAF TotCov RefCov AltCov VARID Gene oncomineGeneClass oncomineVariantClass );
@@ -406,7 +407,7 @@ sub gen_report {
     }
     print "\n";
 
-    print colored("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: $mapd) :::\n", "green on_black");
+    print colored("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: $mapd, CN >= $cn_cutoff) :::\n", "green on_black");
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
     printf "%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header;
