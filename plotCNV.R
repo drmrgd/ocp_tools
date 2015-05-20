@@ -1,4 +1,4 @@
-#!/usr/bin/Rscript
+#!/usr/bin/env Rscript
 
 file = commandArgs(TRUE)[1]
 correctForTumorContent = (length(commandArgs(TRUE)) > 1)
