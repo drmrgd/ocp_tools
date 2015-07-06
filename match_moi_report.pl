@@ -1,13 +1,9 @@
 #!/usr/bin/perl
 # Parse a VCF file and generate a table of MOIs and aMOIs
 # TODO:
-#   - Capture NOCALLS into a hash to print out later (maybe CLI opt to output?)
-#   - Set up CLI opts to set VAF, CN, and Fusion counts as thresholds (fusions use the EGFRvIII vs Others rule)
-#   - Set up CLI opts to either print a fancy report, or dump to CSV with a column for variant type
-#   - Add field to SNV and Indel section to id what rule caused the variant to make the report (Hotspot, EGFR Exon 19, etc)
 #
 # 2/12/2014 - D Sims
-##################################################################################################################################################
+###################################################################################################
 use warnings;
 use strict;
 use autodie;
@@ -24,15 +20,15 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.1.0_040715";
+my $version = "v2.5.0_070615";
 my $description = <<"EOT";
-Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires the use of `convert_vcf.py` from 
-ThermoFisher to run as it does the bulk of the file parsing.
+Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
+the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
 EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
-    -f, --freq      Don't report SNVs or Indels below this allele frequency as a decimal (1 = 100%; 0.1 = 10%). DEFAULT: 5%
+    -f, --freq      Don't report SNVs / Indels below this allele frequency in decimal (0.1=10%). DEFAULT: 0.05 
     -c, --cn        Don't report CNVs below this copy number threshold.  DEFAULT: 7
     -o, --output    Send output to custom file.  Default is STDOUT.
     -v, --version   Version information
@@ -213,11 +209,50 @@ sub proc_snv_indel {
     my @undesired_locations = qw( unknown intergenic intronic utr_5 utr_3 splicesite_5 splicesite_3 upstream
                                   downstream intronic_nc ncRNA nonCoding);
 
+    # Blacklisted variants based on Oncomine's list of recurrent SNPs and high error rate mutations.
+    my @blacklisted_variants = qw(
+        chr2:16082320:C:CCG
+        chr2:209108317:C:T
+        chr4:55593464:A:C
+        chr4:55964925:G:A
+        chr4:106196819:G:T
+        chr5:112170746:AT:A
+        chr5:112175651:A:G
+        chr5:112175951:G:GA
+        chr5:149449827:C:T
+        chr7:116339642:G:T
+        chr7:116340262:A:G
+        chr7:116411990:C:T
+        chr9:139391975:GC:G
+        chr9:139399132:C:T
+        chr10:89685288:T:TA
+        chr10:123247514:C:CT
+        chr10:123247514:CT:C
+        chr11:320606:G:T
+        chr11:108123551:C:T
+        chr11:108138003:T:C
+        chr11:108175462:G:A
+        chr11:108175463:A:T
+        chr13:28623587:C:T
+        chr13:32972626:A:T
+        chr16:68855966:G:A
+        chr17:7578212:GA:G
+        chr17:7579471:G:GC
+        chr17:7579472:G:C
+        chr17:29508455:TTA:T
+        chr17:29553538:G:A
+        chr19:1223125:C:G
+        chr20:36030940:G:C
+    );
+
     return if ( grep { $$variant_info{'FUNC1.location'} eq $_ } @undesired_locations );
     return if $$variant_info{'FUNC1.function'} eq 'synonymous';
 
     my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} );
     
+    # Remove Blacklisted SNPs
+    return if grep { $id eq $_ } @blacklisted_variants;
+
     # Added to prevent missing long indel assembler calls.
     my $vaf;
     if ( $$variant_info{'INFO.A.AF'} eq '.'  ) {
@@ -253,13 +288,31 @@ sub proc_snv_indel {
             gen_var_entry( $variant_info, \$id );
         }
         # EGFR nonframeshiftDeletion in Exon 19 rule
-        elsif ( $$variant_info{'FUNC1.gene'} eq 'EGFR' && $$variant_info{'FUNC1.exon'} eq '19' && $$variant_info{'FUNC1.function'} eq 'nonframeshiftDeletion' ) {
-            gen_var_entry( $variant_info, \$id );
+        # TODO: Get some test cases to try this.  
+        elsif ( $$variant_info{'FUNC1.gene'} eq 'EGFR' 
+            && $$variant_info{'FUNC1.exon'} eq '19' 
+            # Jason saying that now we need Deletion, Insertion, and BlockSub here.
+            && $$variant_info{'FUNC1.function'} =~ /nonframeshift.*/ )
+        {
+                gen_var_entry( $variant_info, \$id );
         }
+
         # ERBB2 nonframeshiftInsertion in Exon20 rule
-        elsif ( $$variant_info{'FUNC1.gene'} eq 'ERBB2' && $$variant_info{'FUNC1.exon'} eq '20' && $$variant_info{'FUNC1.function'} eq 'nonframeshiftInsertion' ) {
-            gen_var_entry( $variant_info, \$id );
-        }
+        elsif ( $$variant_info{'FUNC1.gene'} eq 'ERBB2' 
+            && $$variant_info{'FUNC1.exon'} eq '20' 
+            && $$variant_info{'FUNC1.function'} eq 'nonframeshiftInsertion' ) 
+            {
+                gen_var_entry( $variant_info, \$id );
+            }
+
+        # TODO add in KIT Exon 9 Indel rule....check with jason for specifics
+        # TODO: Get some test cases to try this.  
+        elsif ( $$variant_info{'FUNC1.gene'} eq 'KIT' 
+            && grep { $$variant_info{'FUNC1.exon'} == $_ } [9,11]
+            && $$variant_info{'FUNC1.function'} =~ /nonframeshift(Deletion|Insertion)/ ) 
+            {
+                gen_var_entry( $variant_info, \$id );
+            }
     }
     return;
 }
@@ -296,6 +349,7 @@ sub gen_var_entry {
     #} 
 
     $snv_indel_data{$$id} = [$coord, $ref, $alt, $filter, $fr, $vaf, $tcov, $rcov, $acov, $varid, $gene, $om_gc, $om_vc];
+
     return;
 }
 
