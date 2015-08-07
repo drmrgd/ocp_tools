@@ -20,7 +20,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.5.0_070615";
+my $version = "v2.6.0_080715";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -71,6 +71,7 @@ if ( scalar( @ARGV ) < 1 ) {
 # Write output to either indicated file or STDOUT
 my $out_fh;
 if ( $outfile ) {
+    print "Writing results to $outfile...\n";
 	open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
 } else {
 	$out_fh = \*STDOUT;
@@ -111,6 +112,10 @@ sub read_vcf {
     (my $converted_vcf = $$input_file) =~ s/vcf$/tsv/;
     my @variant_results;
 
+    # Print out a nice title for the report based on the DNA and RNA sample name to make it nicer
+    my ($dna_name, $rna_name) = $$input_file =~ /^(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
+    print {$out_fh} "NCI-MATCH MOI Report for $dna_name DNA / $rna_name RNA\n"; 
+
     # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to 
     # read the VCF twice it looks like
     open( my $vcf_fh, "<", $$input_file );
@@ -132,9 +137,9 @@ sub read_vcf {
     }
     close $vcf_fh;
 
-    print "Coverting VCF file into TSV file for parsing...\n";
+    #print "Coverting VCF file into TSV file for parsing...\n";
     qx( convert_vcf.py --force -i $$input_file -o $converted_vcf );
-    print "Done!\n";
+    #print "Done!\n";
 
     open( my $fh, "<", $converted_vcf );
     chomp(my $header = <$fh>);
