@@ -115,7 +115,7 @@ sub read_vcf {
     my ($dna_name, $rna_name) = $$input_file =~ /^(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
 
     print {$out_fh} "NCI-MATCH MOI Report for ";
-    (! $dna_name || ! $rna_name) ? print {$out_fh} "$input_file\n" : print {$out_fh} "$dna_name DNA / $rna_name RNA\n"; 
+    (! $dna_name || ! $rna_name) ? print {$out_fh} "$$input_file\n" : print {$out_fh} "$dna_name DNA / $rna_name RNA\n"; 
 
     # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to 
     # read the VCF twice it looks like
@@ -311,11 +311,9 @@ sub proc_snv_indel {
                 gen_var_entry( $variant_info, \$id );
             }
 
-        # TODO add in KIT Exon 9 Indel rule....check with jason for specifics
-        # TODO: Get some test cases to try this.  
+        # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
         elsif ( $$variant_info{'FUNC1.gene'} eq 'KIT' 
-            && grep { $$variant_info{'FUNC1.exon'} == $_ } [9,11]
-            #&& $$variant_info{'FUNC1.function'} =~ /nonframeshift(Deletion|Insertion)/ ) 
+            && (grep $$variant_info{'FUNC1.exon'} == $_, (9,11))
             && $$variant_info{'FUNC1.function'} =~ /nonframeshift.*/ ) 
             {
                 gen_var_entry( $variant_info, \$id );
