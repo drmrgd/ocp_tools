@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 # Parse a VCF file and generate a table of MOIs and aMOIs
-# TODO:
 #
 # 2/12/2014 - D Sims
 ###################################################################################################
@@ -20,7 +19,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.6.0_080715";
+my $version = "v2.6.1_082015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -114,7 +113,9 @@ sub read_vcf {
 
     # Print out a nice title for the report based on the DNA and RNA sample name to make it nicer
     my ($dna_name, $rna_name) = $$input_file =~ /^(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
-    print {$out_fh} "NCI-MATCH MOI Report for $dna_name DNA / $rna_name RNA\n"; 
+
+    print {$out_fh} "NCI-MATCH MOI Report for ";
+    (! $dna_name || ! $rna_name) ? print {$out_fh} "$input_file\n" : print {$out_fh} "$dna_name DNA / $rna_name RNA\n"; 
 
     # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to 
     # read the VCF twice it looks like
@@ -314,7 +315,8 @@ sub proc_snv_indel {
         # TODO: Get some test cases to try this.  
         elsif ( $$variant_info{'FUNC1.gene'} eq 'KIT' 
             && grep { $$variant_info{'FUNC1.exon'} == $_ } [9,11]
-            && $$variant_info{'FUNC1.function'} =~ /nonframeshift(Deletion|Insertion)/ ) 
+            #&& $$variant_info{'FUNC1.function'} =~ /nonframeshift(Deletion|Insertion)/ ) 
+            && $$variant_info{'FUNC1.function'} =~ /nonframeshift.*/ ) 
             {
                 gen_var_entry( $variant_info, \$id );
             }
