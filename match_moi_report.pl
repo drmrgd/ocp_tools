@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.6.4_082015";
+my $version = "v2.6.5_082015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -297,26 +297,30 @@ sub proc_snv_indel {
         if ( $$variant_info{'INFO...OID'} ne '.' ) {
             # bin NOCALLs for now
             return if ( $$variant_info{'call'} eq 'NOCALL' );
-            gen_var_entry( $variant_info, \$id );
+            gen_var_entry( $variant_info, \$id, 'Hotspot Variant' );
         }
         # De Novo TSG frameshift calls
         elsif ( grep {$ocp_vc eq $_} @oncomine_vc ) {
-            gen_var_entry( $variant_info, \$id );
+            gen_var_entry( $variant_info, \$id, 'Deleterious in TSG' );
         }
         # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
         # TODO: Get some test cases to try this.  
         elsif ( $gene eq 'EGFR' ) { 
-            gen_var_entry( $variant_info, \$id ) if ( $exon == 19 && $function eq 'nonframeshiftDeletion');
-            gen_var_entry( $variant_info, \$id ) if ( $exon == 20 && $function eq 'nonframeshiftInsertion');
+            if ( $exon == 19 && $function eq 'nonframeshiftDeletion' ) {
+                gen_var_entry( $variant_info, \$id, 'nonframeshiftDeletion in Exon 20' );
+            }
+            elsif ($exon == 20 && $function eq 'nonframeshiftInsertion') {
+                gen_var_entry( $variant_info, \$id, 'nonframeshiftInsertion in Exon 19' );
+            }
         }
         # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
         elsif ( $gene eq 'ERBB2' && $exon eq '20' && $function eq 'nonframeshiftInsertion' ) {
-            gen_var_entry( $variant_info, \$id );
+            gen_var_entry( $variant_info, \$id, 'nonframeshiftInsertion in Exon 20' );
         }
 
         # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
         elsif ( $gene eq 'KIT' && (grep $exon == $_, (9,11)) && $function =~ /nonframeshift.*/ ) {
-            gen_var_entry( $variant_info, \$id );
+            gen_var_entry( $variant_info, \$id, 'nonframeshiftIndel in Exon 9 or 11' );
         }
     }
     return;
@@ -325,6 +329,7 @@ sub proc_snv_indel {
 sub gen_var_entry {
     my $data = shift;
     my $id = shift;
+    my $rule = shift;
     
     my $coord = "$$data{'CHROM'}:$$data{'INFO...OPOS'}";
     my $ref = $$data{'INFO...OREF'};
@@ -341,20 +346,17 @@ sub gen_var_entry {
         $acov = $$data{'INFO.A.FAO'}; 
     }
     $tcov = $rcov + $acov;
-    my $varid = $$data{'ID'};
-    my $gene = $$data{'FUNC1.gene'};
+    my $varid    = $$data{'ID'};
+    my $gene     = $$data{'FUNC1.gene'};
+    my $function = $$data{'FUNC1.function'};
+    my $location = $$data{'FUNC1.location'};
+    my $exon     = $$data{'FUNC1.exon'};
+
     my ($om_gc, $om_vc);
     ($$data{'FUNC1.oncomineGeneClass'}) ? ($om_gc = $$data{'FUNC1.oncomineGeneClass'}) : ($om_gc = '---');
     ($$data{'FUNC1.oncomineVariantClass'}) ? ($om_vc = $$data{'FUNC1.oncomineVariantClass'}) : ($om_vc = '---');
 
-    # Remove duplicate variant entries that span VCF blocks
-    #if ($varid ne '.' && exists $snv_indel_data{$$id}) {
-
-        #delete $snv_indel_data{$$id};
-    #} 
-
-    $snv_indel_data{$$id} = [$coord, $ref, $alt, $filter, $fr, $vaf, $tcov, $rcov, $acov, $varid, $gene, $om_gc, $om_vc];
-
+    $snv_indel_data{$$id} = [$coord, $ref, $alt, $filter, $fr, $vaf, $tcov, $rcov, $acov, $varid, $gene, $om_gc, $om_vc, $rule];
     return;
 }
 
@@ -439,9 +441,9 @@ sub gen_report {
 
     print colored("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
     ($w1, $w2, $w3) = field_width( $snv_indels, 'snv' );
-    my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-10s %-${w3}s %-8s %-10s %-10s %-10s %-14s %-10s %-21s %s\n";
-    my @snv_indel_header = qw( Chrom:Pos Ref Alt Filter Filter_Reason VAF TotCov RefCov AltCov VARID Gene oncomineGeneClass oncomineVariantClass );
-    printf $snv_indel_format, @snv_indel_header;
+    my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-10s %-${w3}s %-8s %-7s %-7s %-7s %-14s %-10s %-21s %-22s %-21s\n";
+    my @snv_indel_header = qw( Chrom:Pos Ref Alt Filter Filter_Reason VAF TotCov RefCov AltCov VARID Gene oncomineGeneClass oncomineVariantClass Functional_Rule );
+   printf $snv_indel_format, @snv_indel_header;
     if ( %$snv_indels ) {
         for my $variant ( sort{ versioncmp( $a, $b ) } keys %$snv_indels ) {
             printf $snv_indel_format, @{$$snv_indels{$variant}};
