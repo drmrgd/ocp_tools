@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.6.5_082015";
+my $version = "v2.6.6_082015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -271,7 +271,8 @@ sub proc_snv_indel {
 
     # Added to prevent missing long indel assembler calls.
     my $vaf;
-    if ( ! $info_af || $info_af eq '.'  ) {
+    #if ( ! $info_af || $info_af eq '.'  ) {
+    if ( $info_af !~ /\d+/ ) { 
         $vaf = $ao / ($ro + $ao);
     } else {
         $vaf = $info_af;
@@ -304,7 +305,6 @@ sub proc_snv_indel {
             gen_var_entry( $variant_info, \$id, 'Deleterious in TSG' );
         }
         # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
-        # TODO: Get some test cases to try this.  
         elsif ( $gene eq 'EGFR' ) { 
             if ( $exon == 19 && $function eq 'nonframeshiftDeletion' ) {
                 gen_var_entry( $variant_info, \$id, 'nonframeshiftDeletion in Exon 20' );
