@@ -261,7 +261,7 @@ sub proc_snv_indel {
 
     # Added to prevent missing long indel assembler calls.
     my $vaf;
-   if ( ! defined $$variant_info{'INFO.A.AF'} || $$variant_info{'INFO.A.AF'} eq '.'  ) {
+    if ( ! $$variant_info{'INFO.A.AF'} || $$variant_info{'INFO.A.AF'} eq '.'  ) {
         $vaf = $$variant_info{'INFO.A.AO'} / ($$variant_info{'INFO.1.RO'} + $$variant_info{'INFO.A.AO'});
     } else {
         $vaf = $$variant_info{'INFO.A.AF'};
