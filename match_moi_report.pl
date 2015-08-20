@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.6.1_082015";
+my $version = "v2.6.3_082015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -261,12 +261,12 @@ sub proc_snv_indel {
 
     # Added to prevent missing long indel assembler calls.
     my $vaf;
-    if ( $$variant_info{'INFO.A.AF'} eq '.'  ) {
+   if ( ! defined $$variant_info{'INFO.A.AF'} || $$variant_info{'INFO.A.AF'} eq '.'  ) {
         $vaf = $$variant_info{'INFO.A.AO'} / ($$variant_info{'INFO.1.RO'} + $$variant_info{'INFO.A.AO'});
     } else {
         $vaf = $$variant_info{'INFO.A.AF'};
     }
-    
+
     # Get some debugging messages if there's an issue
     local $SIG{__WARN__} = sub {
         print "**** Error in parsing line ****\n\n";
@@ -293,17 +293,17 @@ sub proc_snv_indel {
         elsif ( grep { $$variant_info{'FUNC1.oncomineVariantClass'} eq $_ } @oncomine_vc ) {
             gen_var_entry( $variant_info, \$id );
         }
-        # EGFR nonframeshiftDeletion in Exon 19 rule
+        # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
         # TODO: Get some test cases to try this.  
         elsif ( $$variant_info{'FUNC1.gene'} eq 'EGFR' 
-            && $$variant_info{'FUNC1.exon'} eq '19' 
-            # Jason saying that now we need Deletion, Insertion, and BlockSub here.
+            #&& $$variant_info{'FUNC1.exon'} eq '19' 
+            && (grep $$variant_info{'FUNC1.exon'} == $_, (19,20))
             && $$variant_info{'FUNC1.function'} =~ /nonframeshift.*/ )
         {
                 gen_var_entry( $variant_info, \$id );
         }
 
-        # ERBB2 nonframeshiftInsertion in Exon20 rule
+        # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
         elsif ( $$variant_info{'FUNC1.gene'} eq 'ERBB2' 
             && $$variant_info{'FUNC1.exon'} eq '20' 
             && $$variant_info{'FUNC1.function'} eq 'nonframeshiftInsertion' ) 
