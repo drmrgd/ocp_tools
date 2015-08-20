@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.6.6_082015";
+my $version = "v2.7.0_082015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -161,48 +161,16 @@ sub read_vcf {
 }
 
 sub filter_raw_data {
-    # Pass in the raw data from the 'read_vcf()' funct and cull out what we don't need.
+    # Pass in the raw data from the 'read_vcf()' sub and cull out what we don't need.
     my $raw_data = shift;
     my %filtered_data;
 
     # Use hash instead of array of keys in order to prevent undef key warning
-    my %wanted_keys = ( 
-    'rowtype'  => '',
-    'call'    => '',
-    'ALT'   => '',
-    'CHROM'   => '',
-    'FILTER'   => '',
-    'ID' => '',
-    'INFO...FR'   => '',
-    'INFO...OALT'   => '',
-    'INFO...OID'   => '',
-    'INFO...OMAPALT'   => '',
-    'INFO...OPOS'   => '',
-    'INFO...OREF'   => '',
-    'INFO...READ_COUNT'   => '',
-    'INFO.1.FRO'   => '',
-    'INFO.1.NUMTILES' => '',
-    'INFO.A.AF'   => '',
-    'INFO.A.FAO'   => '',
-    'POS'   => '',
-    'REF'   => '',
-    'FORMAT.1.CN'   => '',
-    'INFO...CI'   => '',
-    'INFO.1.RO'   => '',
-    'INFO.A.AO'   => '',
-    'FUNC1.coding'   => '',
-    'FUNC1.exon'   => '',
-    'FUNC1.gene'   => '',
-    'FUNC1.normalizedAlt'   => '',
-    'FUNC1.normalizedPos'   => '',
-    'FUNC1.normalizedRef'   => '',
-    'FUNC1.oncomineGeneClass'   => '',
-    'FUNC1.oncomineVariantClass'  => '',
-    'FUNC1.protein'   => '',
-    'FUNC1.transcript'   => '',
-    'FUNC1.location'   => '',
-    'FUNC1.function'  => '',
-    );
+    my @wanted_vcf_elems = qw( rowtype call ALT CHROM FILTER ID INFO...FR INFO...OALT INFO...OID INFO...OMAPALT INFO...OPOS INFO...OREF 
+                               INFO...READ_COUNT INFO.1.FRO INFO.1.NUMTILES INFO.A.AF INFO.A.FAO POS REF FORMAT.1.CN INFO...CI INFO.1.RO
+                               INFO.A.AO FUNC1.coding FUNC1.exon FUNC1.gene FUNC1.normalizedAlt FUNC1.normalizedRef FUNC1.normalizedPos
+                               FUNC1.oncomineGeneClass FUNC1.oncomineVariantClass FUNC1.protein FUNC1.transcript FUNC1.location FUNC1.function );
+    my %wanted_keys = map { $_ => '' } @wanted_vcf_elems;
     
     @filtered_data{keys %wanted_keys} = @$raw_data{keys %wanted_keys};
     return %filtered_data;
