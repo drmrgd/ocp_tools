@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.6.3_082015";
+my $version = "v2.6.4_082015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -251,8 +251,18 @@ sub proc_snv_indel {
         chr20:36030940:G:C
     );
 
-    return if ( grep { $$variant_info{'FUNC1.location'} eq $_ } @undesired_locations );
-    return if $$variant_info{'FUNC1.function'} eq 'synonymous';
+    # Map these variables to make typing easier and the code cleaner downstream
+    my $info_af  = $$variant_info{'INFO.A.AF'};
+    my $ro       = $$variant_info{'INFO.1.RO'};
+    my $ao       = $$variant_info{'INFO.A.AO'};
+    my $function = $$variant_info{'FUNC1.function'};
+    my $location = $$variant_info{'FUNC1.location'};
+    my $exon     = $$variant_info{'FUNC1.exon'};
+    my $gene     = $$variant_info{'FUNC1.gene'};
+    my $ocp_vc   = $$variant_info{'FUNC1.oncomineVariantClass'};
+
+    return if ( grep { $location eq $_ } @undesired_locations );
+    return if $function eq 'synonymous';
 
     my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} );
     
@@ -261,10 +271,10 @@ sub proc_snv_indel {
 
     # Added to prevent missing long indel assembler calls.
     my $vaf;
-    if ( ! $$variant_info{'INFO.A.AF'} || $$variant_info{'INFO.A.AF'} eq '.'  ) {
-        $vaf = $$variant_info{'INFO.A.AO'} / ($$variant_info{'INFO.1.RO'} + $$variant_info{'INFO.A.AO'});
+    if ( ! $info_af || $info_af eq '.'  ) {
+        $vaf = $ao / ($ro + $ao);
     } else {
-        $vaf = $$variant_info{'INFO.A.AF'};
+        $vaf = $info_af;
     }
 
     # Get some debugging messages if there's an issue
@@ -280,7 +290,7 @@ sub proc_snv_indel {
     };
 
     # Need to define the hash entry or we'll get an issue later on.
-    $$variant_info{'FUNC1.oncomineVariantClass'} //= '---';
+    $ocp_vc //= '---';
 
     if ( $vaf >= $freq_cutoff ) {
         # Anything that's a hotspot
@@ -290,34 +300,24 @@ sub proc_snv_indel {
             gen_var_entry( $variant_info, \$id );
         }
         # De Novo TSG frameshift calls
-        elsif ( grep { $$variant_info{'FUNC1.oncomineVariantClass'} eq $_ } @oncomine_vc ) {
+        elsif ( grep {$ocp_vc eq $_} @oncomine_vc ) {
             gen_var_entry( $variant_info, \$id );
         }
         # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
         # TODO: Get some test cases to try this.  
-        elsif ( $$variant_info{'FUNC1.gene'} eq 'EGFR' 
-            #&& $$variant_info{'FUNC1.exon'} eq '19' 
-            && (grep $$variant_info{'FUNC1.exon'} == $_, (19,20))
-            && $$variant_info{'FUNC1.function'} =~ /nonframeshift.*/ )
-        {
-                gen_var_entry( $variant_info, \$id );
+        elsif ( $gene eq 'EGFR' ) { 
+            gen_var_entry( $variant_info, \$id ) if ( $exon == 19 && $function eq 'nonframeshiftDeletion');
+            gen_var_entry( $variant_info, \$id ) if ( $exon == 20 && $function eq 'nonframeshiftInsertion');
+        }
+        # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
+        elsif ( $gene eq 'ERBB2' && $exon eq '20' && $function eq 'nonframeshiftInsertion' ) {
+            gen_var_entry( $variant_info, \$id );
         }
 
-        # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
-        elsif ( $$variant_info{'FUNC1.gene'} eq 'ERBB2' 
-            && $$variant_info{'FUNC1.exon'} eq '20' 
-            && $$variant_info{'FUNC1.function'} eq 'nonframeshiftInsertion' ) 
-            {
-                gen_var_entry( $variant_info, \$id );
-            }
-
         # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
-        elsif ( $$variant_info{'FUNC1.gene'} eq 'KIT' 
-            && (grep $$variant_info{'FUNC1.exon'} == $_, (9,11))
-            && $$variant_info{'FUNC1.function'} =~ /nonframeshift.*/ ) 
-            {
-                gen_var_entry( $variant_info, \$id );
-            }
+        elsif ( $gene eq 'KIT' && (grep $exon == $_, (9,11)) && $function =~ /nonframeshift.*/ ) {
+            gen_var_entry( $variant_info, \$id );
+        }
     }
     return;
 }
