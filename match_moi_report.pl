@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.7.0_082015";
+my $version = "v2.7.2_090115";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -87,7 +87,7 @@ if (DEBUG) {
 
 ########------------------------------ END ARG Parsing ---------------------------------#########
 my $vcf_file = shift;
-my ($gender, $cellularity, $mapd);
+my ($gender, $cellularity, $mapd, $tot_rna_reads);
 my $variant_data = read_vcf(\$vcf_file );
 
 # Parse TSV file based on variant type and load up a hash of results.
@@ -132,6 +132,10 @@ sub read_vcf {
             }
             elsif ( /mapd=(\d\.\d+)/ ) {
                 $mapd = $1; 
+                next;
+            }
+            elsif ( /TotalMappedFusionPanelReads=(\d+)/ ) {
+                $tot_rna_reads = $1;
                 next;
             }
         }
@@ -407,6 +411,9 @@ sub gen_report {
 
     select $out_fh;
 
+    #########################
+    ## SNV / Indel Output  ##
+    #########################
     print colored("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
     ($w1, $w2, $w3) = field_width( $snv_indels, 'snv' );
     my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-10s %-${w3}s %-8s %-7s %-7s %-7s %-14s %-10s %-21s %-22s %-21s\n";
@@ -421,7 +428,18 @@ sub gen_report {
     }
     print "\n";
 
-    print colored("::: MATCH Reportable Fusions :::\n", "green on_black");
+    #########################
+    ##   Fusions Output    ##
+    #########################
+    my $read_count;
+    ($tot_rna_reads < 100000) ? 
+        ($read_count = colored($tot_rna_reads, 'bold red on_black')) : 
+        ($read_count = colored($tot_rna_reads, 'green on_black'));
+
+    print colored("::: MATCH Reportable Fusions (Total Reads: ", 'green on_black');
+    print $read_count;
+    print colored( ") :::\n", "green on_black");
+
     ($w1) = field_width( $fusion_data, 'fusion' );
     my $fusion_format = "%-${w1}s %-12s %-12s %-15s %-15s\n";
     my @fusion_header = qw( Fusion ID Read_Count Driver_Gene Partner_Gene );
@@ -436,7 +454,18 @@ sub gen_report {
     }
     print "\n";
 
-    print colored("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: $mapd, CN >= $cn_cutoff) :::\n", "green on_black");
+    ########################
+    ##  CNV Result Ouput  ##
+    ########################
+    my $formatted_mapd;
+    ($mapd >= 0.9) ? 
+        ($formatted_mapd = colored($mapd, 'bold red on_black')) : 
+        ($formatted_mapd = colored($mapd, 'green on_black'));
+
+    print colored("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'green on_black');
+    print $formatted_mapd;
+    print colored( ", CN >= $cn_cutoff) :::\n", "green on_black");
+
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
     printf "%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header;
