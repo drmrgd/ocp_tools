@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.7.2_090115";
+my $version = "v2.7.3_090115";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -250,6 +250,9 @@ sub proc_snv_indel {
         $vaf = $info_af;
     }
 
+    # Substitute for the computed one to be used for the rest of the script
+    $$variant_info{'VAF'} = $vaf;
+
     # Get some debugging messages if there's an issue
     local $SIG{__WARN__} = sub {
         print "**** Error in parsing line ****\n\n";
@@ -308,9 +311,12 @@ sub gen_var_entry {
     my $alt = $$data{'INFO...OALT'};
     my $filter = $$data{'FILTER'};
     (my $fr = $$data{'INFO...FR'}) =~ s/^\.,//;
-    my $vaf = sprintf( "%0.2f", ($$data{'INFO.A.AF'} * 100) );
+    #my $vaf = sprintf( "%0.2f", ($$data{'INFO.A.AF'} * 100) );
+    my $vaf = sprintf( "%0.2f", ($$data{'VAF'} * 100) );
     my ($rcov, $acov, $tcov);
-    if ( $$data{'INFO.A.FAO'} eq '.' ) {
+    # TODO: Check this logic; I think it will either be a null field or a result.  No longer just a '.'?
+    #if ( $$data{'INFO.A.FAO'} eq '.' ) {
+    if ( ! $$data{'INFO.A.FAO'} ) {
         $rcov = $$data{'INFO.1.RO'};
         $acov = $$data{'INFO.A.AO'}; 
     } else {
