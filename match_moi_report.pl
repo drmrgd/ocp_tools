@@ -18,6 +18,13 @@ use Sort::Versions;
 use Term::ANSIColor;
 use Data::Dump;
 
+# Remove when in prod.
+#print "\n";
+#print colored("*" x 50, 'bold yellow on_black');
+#print colored("\n    DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
+#print colored("*" x 50, 'bold yellow on_black');
+#print "\n\n";
+
 my $scriptname = basename($0);
 my $version = "v2.7.3_090115";
 my $description = <<"EOT";
@@ -329,12 +336,14 @@ sub gen_var_entry {
     my $function = $$data{'FUNC1.function'};
     my $location = $$data{'FUNC1.location'};
     my $exon     = $$data{'FUNC1.exon'};
+    my $hgvs     = $$data{'FUNC1.coding'};
 
     my ($om_gc, $om_vc);
     ($$data{'FUNC1.oncomineGeneClass'}) ? ($om_gc = $$data{'FUNC1.oncomineGeneClass'}) : ($om_gc = '---');
     ($$data{'FUNC1.oncomineVariantClass'}) ? ($om_vc = $$data{'FUNC1.oncomineVariantClass'}) : ($om_vc = '---');
 
-    $snv_indel_data{$$id} = [$coord, $ref, $alt, $filter, $fr, $vaf, $tcov, $rcov, $acov, $varid, $gene, $om_gc, $om_vc, $rule];
+    #$snv_indel_data{$$id} = [$coord, $ref, $alt, $filter, $fr, $vaf, $tcov, $rcov, $acov, $varid, $gene, $hgvs, $om_gc, $om_vc, $rule];
+    $snv_indel_data{$$id} = [$coord, $ref, $alt, $vaf, $tcov, $rcov, $acov, $varid, $gene, $hgvs, $om_gc, $om_vc, $rule];
     return;
 }
 
@@ -382,6 +391,7 @@ sub field_width {
 
     my $ref_width = 0;
     my $var_width = 0;
+    my $hgvs_width = 0;
     my $filter_width= 0;
     my $fusion_id_width = 0;
 
@@ -390,13 +400,15 @@ sub field_width {
             my $ref_len = length( $$data_ref{$variant}[1] );
             my $alt_len = length( $$data_ref{$variant}[2] );
             my $filter_len = length( $$data_ref{$variant}[4] );
+            my $hgvs_len = length( $$data_ref{$variant}[9] );
             $ref_width = $ref_len if ( $ref_len > $ref_width );
             $var_width = $alt_len if ( $alt_len > $var_width );
             $filter_width = $filter_len if ( $filter_len > $filter_width );
+            $hgvs_width = $hgvs_len if ( $hgvs_len > $hgvs_width );
         }
 
         ( $filter_width > 13 ) ? ($filter_width += 4) : ($filter_width = 17);
-        return ( $ref_width + 4, $var_width + 4, $filter_width);
+        return ( $ref_width + 4, $var_width + 4, $filter_width, $hgvs_width + 4);
     } 
     elsif ( $type eq 'fusion' ) {
         for my $variant ( keys %$data_ref ) {
@@ -413,7 +425,7 @@ sub gen_report {
     # Print out the final MOI Report
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
 
-    my ($w1, $w2, $w3);
+    my ($w1, $w2, $w3, $w4);
 
     select $out_fh;
 
@@ -421,10 +433,12 @@ sub gen_report {
     ## SNV / Indel Output  ##
     #########################
     print colored("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
-    ($w1, $w2, $w3) = field_width( $snv_indels, 'snv' );
-    my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-10s %-${w3}s %-8s %-7s %-7s %-7s %-14s %-10s %-21s %-22s %-21s\n";
-    my @snv_indel_header = qw( Chrom:Pos Ref Alt Filter Filter_Reason VAF TotCov RefCov AltCov VARID Gene oncomineGeneClass oncomineVariantClass Functional_Rule );
-   printf $snv_indel_format, @snv_indel_header;
+    ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
+    #my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-10s %-${w3}s %-8s %-7s %-7s %-7s %-14s %-10s %-${w4}s %-21s %-22s %-21s\n";
+    #my @snv_indel_header = qw( Chrom:Pos Ref Alt Filter Filter_Reason VAF TotCov RefCov AltCov VARID Gene HGVS oncomineGeneClass oncomineVariantClass Functional_Rule );
+    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene HGVS oncomineGeneClass oncomineVariantClass Functional_Rule );
+    my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-${w4}s %-21s %-22s %-21s\n";
+    printf $snv_indel_format, @snv_indel_header;
     if ( %$snv_indels ) {
         for my $variant ( sort{ versioncmp( $a, $b ) } keys %$snv_indels ) {
             printf $snv_indel_format, @{$$snv_indels{$variant}};
