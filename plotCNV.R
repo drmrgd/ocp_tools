@@ -68,7 +68,8 @@ boxplot(vals~genes, data=df, at=genepos, las=2, cex.axis=1.2, cex.lab=2.0, boxlw
 
 abline(h = 2, col = "black", lty=2, lwd=2)
 abline(h = 1, col = "blue", lwd=2)
-abline(h = 4, col = "red", lwd=2)
+#abline(h = 4, col = "red", lwd=2)
+abline(h = 7, col = "red", lwd=2)
 
 lastpos = 1
 for (c in chrpos) {
