@@ -26,7 +26,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.7.3_090115";
+my $version = "v2.8.0_092215";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -98,16 +98,21 @@ my ($gender, $cellularity, $mapd, $tot_rna_reads);
 my $variant_data = read_vcf(\$vcf_file );
 
 # Parse TSV file based on variant type and load up a hash of results.
-my (%snv_indel_data, %fusion_data, %cnv_data);
+my (%snv_indel_data, %fusion_data, %cnv_data, %ipc_data);
 for my $variant (@$variant_data) {
     my $type = $$variant{'rowtype'};
     given ($type) {
         when (/([ms]np|ins|del|complex)/) { proc_snv_indel( $variant ) }
         when (/Fusion/)                   { proc_fusion( $variant ) }
         when (/CNV/)                      { proc_cnv( $variant ) }
+        when (/ExprControl/)              { proc_ipc( $variant) }
         default                           {next}
     }
 }
+
+my $expr_control_sum = 0;
+$expr_control_sum += $ipc_data{$_} for keys %ipc_data;
+$fusion_data{'EXPR_CTRL'} = $expr_control_sum;
 
 # Print out the combined report
 gen_report( \%snv_indel_data, \%fusion_data, \%cnv_data );
@@ -124,8 +129,7 @@ sub read_vcf {
     print {$out_fh} "NCI-MATCH MOI Report for ";
     (! $dna_name || ! $rna_name) ? print {$out_fh} "$$input_file\n" : print {$out_fh} "$dna_name DNA / $rna_name RNA\n"; 
 
-    # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to 
-    # read the VCF twice it looks like
+    # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to read the VCF twice it looks like
     open( my $vcf_fh, "<", $$input_file );
     while (<$vcf_fh>) {
         if ( /^##/ ) {
@@ -151,7 +155,6 @@ sub read_vcf {
 
     #print "Coverting VCF file into TSV file for parsing...\n";
     qx( convert_vcf.py --force -i $$input_file -o $converted_vcf );
-    #print "Done!\n";
 
     open( my $fh, "<", $converted_vcf );
     chomp(my $header = <$fh>);
@@ -177,10 +180,12 @@ sub filter_raw_data {
     my %filtered_data;
 
     # Use hash instead of array of keys in order to prevent undef key warning
-    my @wanted_vcf_elems = qw( rowtype call ALT CHROM FILTER ID INFO...FR INFO...OALT INFO...OID INFO...OMAPALT INFO...OPOS INFO...OREF 
-                               INFO...READ_COUNT INFO.1.FRO INFO.1.NUMTILES INFO.A.AF INFO.A.FAO POS REF FORMAT.1.CN INFO...CI INFO.1.RO
-                               INFO.A.AO FUNC1.coding FUNC1.exon FUNC1.gene FUNC1.normalizedAlt FUNC1.normalizedRef FUNC1.normalizedPos
-                               FUNC1.oncomineGeneClass FUNC1.oncomineVariantClass FUNC1.protein FUNC1.transcript FUNC1.location FUNC1.function );
+    my @wanted_vcf_elems = qw( rowtype call ALT CHROM FILTER ID INFO...FR INFO...OALT INFO...OID INFO...OMAPALT 
+                               INFO...OPOS INFO...OREF INFO...READ_COUNT INFO.1.FRO INFO.1.NUMTILES INFO.A.AF 
+                               INFO.A.FAO POS REF FORMAT.1.CN INFO...CI INFO.1.RO INFO.A.AO FUNC1.coding FUNC1.exon 
+                               FUNC1.gene FUNC1.normalizedAlt FUNC1.normalizedRef FUNC1.normalizedPos 
+                               FUNC1.oncomineGeneClass FUNC1.oncomineVariantClass FUNC1.protein FUNC1.transcript 
+                               FUNC1.location FUNC1.function );
     my %wanted_keys = map { $_ => '' } @wanted_vcf_elems;
     
     @filtered_data{keys %wanted_keys} = @$raw_data{keys %wanted_keys};
@@ -208,6 +213,7 @@ sub proc_snv_indel {
         chr7:116339642:G:T
         chr7:116340262:A:G
         chr7:116411990:C:T
+        chr9:98209628:T:TG
         chr9:139391975:GC:G
         chr9:139399132:C:T
         chr10:89685288:T:TA
@@ -318,11 +324,8 @@ sub gen_var_entry {
     my $alt = $$data{'INFO...OALT'};
     my $filter = $$data{'FILTER'};
     (my $fr = $$data{'INFO...FR'}) =~ s/^\.,//;
-    #my $vaf = sprintf( "%0.2f", ($$data{'INFO.A.AF'} * 100) );
     my $vaf = sprintf( "%0.2f", ($$data{'VAF'} * 100) );
     my ($rcov, $acov, $tcov);
-    # TODO: Check this logic; I think it will either be a null field or a result.  No longer just a '.'?
-    #if ( $$data{'INFO.A.FAO'} eq '.' ) {
     if ( ! $$data{'INFO.A.FAO'} ) {
         $rcov = $$data{'INFO.1.RO'};
         $acov = $$data{'INFO.A.AO'}; 
@@ -341,8 +344,6 @@ sub gen_var_entry {
     my ($om_gc, $om_vc);
     ($$data{'FUNC1.oncomineGeneClass'}) ? ($om_gc = $$data{'FUNC1.oncomineGeneClass'}) : ($om_gc = '---');
     ($$data{'FUNC1.oncomineVariantClass'}) ? ($om_vc = $$data{'FUNC1.oncomineVariantClass'}) : ($om_vc = '---');
-
-    #$snv_indel_data{$$id} = [$coord, $ref, $alt, $filter, $fr, $vaf, $tcov, $rcov, $acov, $varid, $gene, $hgvs, $om_gc, $om_vc, $rule];
     $snv_indel_data{$$id} = [$coord, $ref, $alt, $vaf, $tcov, $rcov, $acov, $varid, $gene, $hgvs, $om_gc, $om_vc, $rule];
     return;
 }
@@ -371,6 +372,13 @@ sub proc_fusion {
             $fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
         }
     }
+    return;
+}
+
+sub proc_ipc {
+    # Get the RNA panel expression control data for output.
+    my $variant_info = shift;
+    $ipc_data{$$variant_info{'FUNC1.gene'}} = $$variant_info{'INFO...READ_COUNT'};
     return;
 }
 
@@ -434,9 +442,8 @@ sub gen_report {
     #########################
     print colored("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
     ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
-    #my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-10s %-${w3}s %-8s %-7s %-7s %-7s %-14s %-10s %-${w4}s %-21s %-22s %-21s\n";
-    #my @snv_indel_header = qw( Chrom:Pos Ref Alt Filter Filter_Reason VAF TotCov RefCov AltCov VARID Gene HGVS oncomineGeneClass oncomineVariantClass Functional_Rule );
-    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene HGVS oncomineGeneClass oncomineVariantClass Functional_Rule );
+    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene HGVS oncomineGeneClass 
+                               oncomineVariantClass Functional_Rule );
     my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-${w4}s %-21s %-22s %-21s\n";
     printf $snv_indel_format, @snv_indel_header;
     if ( %$snv_indels ) {
@@ -456,8 +463,17 @@ sub gen_report {
         ($read_count = colored($tot_rna_reads, 'bold red on_black')) : 
         ($read_count = colored($tot_rna_reads, 'green on_black'));
 
+    my $ipc_reads = $$fusion_data{'EXPR_CTRL'};
+    delete $$fusion_data{'EXPR_CTRL'};
+    my $ipc_output;
+    ($ipc_reads < 20000) ? 
+        ($ipc_output = colored($ipc_reads, 'bold red on_black')) : 
+        ($ipc_output = colored($ipc_reads, 'green on_black'));
+
     print colored("::: MATCH Reportable Fusions (Total Reads: ", 'green on_black');
     print $read_count;
+    print colored(', Sum Expression Control Reads: ', 'green on_black');
+    print $ipc_output;
     print colored( ") :::\n", "green on_black");
 
     ($w1) = field_width( $fusion_data, 'fusion' );
