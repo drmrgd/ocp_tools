@@ -326,7 +326,7 @@ sub gen_var_entry {
     (my $fr = $$data{'INFO...FR'}) =~ s/^\.,//;
     my $vaf = sprintf( "%0.2f", ($$data{'VAF'} * 100) );
     my ($rcov, $acov, $tcov);
-    if ( ! $$data{'INFO.A.FAO'} ) {
+    if ( ! $$data{'INFO.A.FAO'} || ! $$data{'INFO.A.FRO'} ) {
         $rcov = $$data{'INFO.1.RO'};
         $acov = $$data{'INFO.A.AO'}; 
     } else {
