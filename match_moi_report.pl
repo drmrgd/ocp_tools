@@ -26,7 +26,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.8.0_092215";
+my $version = "v2.9.0_093015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -340,11 +340,14 @@ sub gen_var_entry {
     my $location = $$data{'FUNC1.location'};
     my $exon     = $$data{'FUNC1.exon'};
     my $hgvs     = $$data{'FUNC1.coding'};
+    my $tscript  = $$data{'FUNC1.transcript'};
+    my $protein  = $$data{'FUNC1.protein'};
 
     my ($om_gc, $om_vc);
     ($$data{'FUNC1.oncomineGeneClass'}) ? ($om_gc = $$data{'FUNC1.oncomineGeneClass'}) : ($om_gc = '---');
     ($$data{'FUNC1.oncomineVariantClass'}) ? ($om_vc = $$data{'FUNC1.oncomineVariantClass'}) : ($om_vc = '---');
-    $snv_indel_data{$$id} = [$coord, $ref, $alt, $vaf, $tcov, $rcov, $acov, $varid, $gene, $hgvs, $om_gc, $om_vc, $rule];
+    #$snv_indel_data{$$id} = [$coord, $ref, $alt, $vaf, $tcov, $rcov, $acov, $varid, $gene, $hgvs, $om_gc, $om_vc, $rule];
+    $snv_indel_data{$$id} = [$coord, $ref, $alt, $vaf, $tcov, $rcov, $acov, $varid, $gene, $tscript, $hgvs, $protein, $om_gc, $om_vc, $rule];
     return;
 }
 
@@ -408,7 +411,7 @@ sub field_width {
             my $ref_len = length( $$data_ref{$variant}[1] );
             my $alt_len = length( $$data_ref{$variant}[2] );
             my $filter_len = length( $$data_ref{$variant}[4] );
-            my $hgvs_len = length( $$data_ref{$variant}[9] );
+            my $hgvs_len = length( $$data_ref{$variant}[10] );
             $ref_width = $ref_len if ( $ref_len > $ref_width );
             $var_width = $alt_len if ( $alt_len > $var_width );
             $filter_width = $filter_len if ( $filter_len > $filter_width );
@@ -442,9 +445,10 @@ sub gen_report {
     #########################
     print colored("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
     ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
-    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene HGVS oncomineGeneClass 
+    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript HGVS Protein oncomineGeneClass 
                                oncomineVariantClass Functional_Rule );
-    my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-${w4}s %-21s %-22s %-21s\n";
+    my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-16s %-${w4}s %-16s %-21s %-22s %-21s\n";
+
     printf $snv_indel_format, @snv_indel_header;
     if ( %$snv_indels ) {
         for my $variant ( sort{ versioncmp( $a, $b ) } keys %$snv_indels ) {
