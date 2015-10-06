@@ -93,6 +93,11 @@ for my $input_file (@vcfs) {
                 $gender = $1;
                 next;
             }
+            # Need to add to accomodate the new CNV plugin; may not have the same field as the normal IR data.
+            if ($_ =~ /AssumedGender=([mf])/) {
+                ($1 eq 'm') ? ($gender='Male') : ($gender='Female');
+                next;
+            }
             elsif ( $_ =~ /mapd=(\d\.\d+)/ ) {
                 $mapd = $1;
                 next;
