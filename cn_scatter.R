@@ -13,9 +13,11 @@ in_fh <- file( input_file, 'r' )
 title <- readLines( in_fh, n=1 )
 
 # Capture elements from the first line to be used later in the graph
+#regex <- '(Gender: \\w+), (Cellularity: \\d\\.\\d+), (MAPD: \\d\\.\\d+)'
+#elems <- str_extract( title, perl(regex) )
 regex <- '(Gender: \\w+), (Cellularity: \\d\\.\\d+), (MAPD: \\d\\.\\d+)'
-elems <- str_extract( title, perl(regex) )
-gtitle <- str_extract( title, perl( '(CNVs Found in [-_A-Z0-9]+)') )
+elems <- str_extract( title, '(Gender: \\w+), (Cellularity: \\d\\.\\d+), (MAPD: \\d\\.\\d+)')
+gtitle <- str_extract( title, '(CNVs Found in [-_A-Z0-9]+)')
 gtitle <- gsub( 'Found in', 'Report for', gtitle )
 
 # Now read the rest of the table into a df
