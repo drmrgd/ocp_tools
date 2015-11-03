@@ -10,7 +10,7 @@ use feature "switch";
 # Need to turn of smartmatch warning, but only if the version of perl is newer
 no if $] > 5.018, 'warnings', 'experimental::smartmatch'; 
 
-use constant DEBUG => 0;
+use constant DEBUG => 1;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
@@ -26,7 +26,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.9.0_093015";
+my $version = "v2.9.1_110315";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -124,7 +124,7 @@ sub read_vcf {
     my @variant_results;
 
     # Print out a nice title for the report based on the DNA and RNA sample name to make it nicer
-    my ($dna_name, $rna_name) = $$input_file =~ /^(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
+    my ($dna_name, $rna_name) = $$input_file =~ /^(?:.*\/)?(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
 
     print {$out_fh} "NCI-MATCH MOI Report for ";
     (! $dna_name || ! $rna_name) ? print {$out_fh} "$$input_file\n" : print {$out_fh} "$dna_name DNA / $rna_name RNA\n"; 
