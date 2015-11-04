@@ -251,8 +251,9 @@ sub proc_snv_indel {
 
     my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} );
     
-    # Remove Blacklisted SNPs
-    return if grep { $id eq $_ } @blacklisted_variants;
+    #XXX:
+    return unless $id eq 'chr17:7577124:C:A';
+
 
     # Added to prevent missing long indel assembler calls.
     my $vaf;
@@ -265,6 +266,15 @@ sub proc_snv_indel {
 
     # Substitute for the computed one to be used for the rest of the script
     $$variant_info{'VAF'} = $vaf;
+
+    # Remove Blacklisted SNPs
+    return if grep { $id eq $_ } @blacklisted_variants;
+    print "==========================  INFO  ===========================\n";
+    print "variant id  => $id\n";
+    print "vaf         => $vaf\n";
+    dd $variant_info;
+    print "=============================================================\n";
+
 
     # Get some debugging messages if there's an issue
     local $SIG{__WARN__} = sub {
