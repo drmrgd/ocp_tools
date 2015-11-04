@@ -10,7 +10,7 @@ use feature "switch";
 # Need to turn of smartmatch warning, but only if the version of perl is newer
 no if $] > 5.018, 'warnings', 'experimental::smartmatch'; 
 
-use constant DEBUG => 1;
+use constant DEBUG => 0;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
@@ -26,7 +26,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.9.1_110315";
+my $version = "v2.9.2_110415";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -251,10 +251,6 @@ sub proc_snv_indel {
 
     my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} );
     
-    #XXX:
-    return unless $id eq 'chr17:7577124:C:A';
-
-
     # Added to prevent missing long indel assembler calls.
     my $vaf;
     #if ( ! $info_af || $info_af eq '.'  ) {
@@ -269,12 +265,6 @@ sub proc_snv_indel {
 
     # Remove Blacklisted SNPs
     return if grep { $id eq $_ } @blacklisted_variants;
-    print "==========================  INFO  ===========================\n";
-    print "variant id  => $id\n";
-    print "vaf         => $vaf\n";
-    dd $variant_info;
-    print "=============================================================\n";
-
 
     # Get some debugging messages if there's an issue
     local $SIG{__WARN__} = sub {
@@ -328,15 +318,16 @@ sub gen_var_entry {
     my $data = shift;
     my $id = shift;
     my $rule = shift;
-    
+
     my $coord = "$$data{'CHROM'}:$$data{'INFO...OPOS'}";
     my $ref = $$data{'INFO...OREF'};
     my $alt = $$data{'INFO...OALT'};
     my $filter = $$data{'FILTER'};
     (my $fr = $$data{'INFO...FR'}) =~ s/^\.,//;
     my $vaf = sprintf( "%0.2f", ($$data{'VAF'} * 100) );
+
     my ($rcov, $acov, $tcov);
-    if ( ! $$data{'INFO.A.FAO'} || ! $$data{'INFO.A.FRO'} ) {
+    if ( ! $$data{'INFO.A.FAO'} || ! $$data{'INFO.1.FRO'} ) {
         $rcov = $$data{'INFO.1.RO'};
         $acov = $$data{'INFO.A.AO'}; 
     } else {
@@ -356,7 +347,6 @@ sub gen_var_entry {
     my ($om_gc, $om_vc);
     ($$data{'FUNC1.oncomineGeneClass'}) ? ($om_gc = $$data{'FUNC1.oncomineGeneClass'}) : ($om_gc = '---');
     ($$data{'FUNC1.oncomineVariantClass'}) ? ($om_vc = $$data{'FUNC1.oncomineVariantClass'}) : ($om_vc = '---');
-    #$snv_indel_data{$$id} = [$coord, $ref, $alt, $vaf, $tcov, $rcov, $acov, $varid, $gene, $hgvs, $om_gc, $om_vc, $rule];
     $snv_indel_data{$$id} = [$coord, $ref, $alt, $vaf, $tcov, $rcov, $acov, $varid, $gene, $tscript, $hgvs, $protein, $om_gc, $om_vc, $rule];
     return;
 }
