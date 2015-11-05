@@ -17,16 +17,17 @@ use File::Basename;
 use Sort::Versions;
 use Term::ANSIColor;
 use Data::Dump;
+use IO::Tee;
 
 # Remove when in prod.
-#print "\n";
-#print colored("*" x 50, 'bold yellow on_black');
-#print colored("\n    DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
-#print colored("*" x 50, 'bold yellow on_black');
-#print "\n\n";
+print "\n";
+print colored("*" x 50, 'bold yellow on_black');
+print colored("\n    DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
+print colored("*" x 50, 'bold yellow on_black');
+print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.9.2_110415";
+my $version = "v2.9.3_110415-dev";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -76,19 +77,23 @@ if ( scalar( @ARGV ) < 1 ) {
 
 # Write output to either indicated file or STDOUT
 my $out_fh;
+#my $output;
 if ( $outfile ) {
-    print "Writing results to $outfile...\n";
-	open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
-} else {
-	$out_fh = \*STDOUT;
+    #print "Writing results to $outfile...\n";
+    open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
+    #$output = IO::Tee->new(\*STDOUT,$out_fh);
 }
+#} else {
+	#$out_fh = \*STDOUT;
+#}
 
 if (DEBUG) {
     print "======================================  DEBUG  ======================================\n";
     print "Params as passed into script:\n";
     print "\tCNV Threshold  => $cn_cutoff\n";
     print "\tVAF Threshold  => $freq_cutoff\n";
-    print "\tOutput File    => $out_fh\n";
+    #print "\tOutput File    => $out_fh\n";
+    print "\tOutput File    => $outfile\n";
     print "=====================================================================================\n\n";
 }
 
@@ -126,8 +131,11 @@ sub read_vcf {
     # Print out a nice title for the report based on the DNA and RNA sample name to make it nicer
     my ($dna_name, $rna_name) = $$input_file =~ /^(?:.*\/)?(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
 
-    print {$out_fh} "NCI-MATCH MOI Report for ";
-    (! $dna_name || ! $rna_name) ? print {$out_fh} "$$input_file\n" : print {$out_fh} "$dna_name DNA / $rna_name RNA\n"; 
+    #print {$output} "NCI-MATCH MOI Report for ";
+    #(! $dna_name || ! $rna_name) ? print {$output} "$$input_file\n" : print {$output} "$dna_name DNA / $rna_name RNA\n"; 
+
+    print_msg("NCI-MATCH MOI Report for ", undef);
+    (! $dna_name || ! $rna_name) ? print_msg("$$input_file\n", undef) : print_msg("$dna_name DNA / $rna_name RNA\n", undef); 
 
     # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to read the VCF twice it looks like
     open( my $vcf_fh, "<", $$input_file );
@@ -432,32 +440,60 @@ sub field_width {
     return;
 }
 
+sub print_msg {
+    # Kludgy way to simulate tee, but with and without colored output (ANSI escape codes in .txt files not helpful!
+    # TODO: some output is printf output for column info.  How can I accomdate this and / or colored output.  too m
+    #       many collisions here!
+    # XXX
+    my ($msg, $format) = @_;
+
+    #my $text_format = $format // '...';
+    #print "========================  DEBUG  ========================\n";
+    #print "Text:   $msg\n";
+    #print "Format: $text_format\n";
+    #print "=========================================================\n";
+    
+    # print to the output file
+    print {$out_fh} $msg if $outfile;
+
+    # print to stdout, either colored or not.
+    ($format) ? print colored($msg, $format) : print $msg;
+    return;
+}
+
 sub gen_report {
     # Print out the final MOI Report
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
 
     my ($w1, $w2, $w3, $w4);
 
-    select $out_fh;
+    # TODO: remove me!
+    #select $output;
 
     #########################
     ## SNV / Indel Output  ##
     #########################
-    print colored("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
+    #print colored("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
+    print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
     ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
     my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript HGVS Protein oncomineGeneClass 
                                oncomineVariantClass Functional_Rule );
     my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-16s %-${w4}s %-16s %-21s %-22s %-21s\n";
 
+    # TODO: how to print header?
     printf $snv_indel_format, @snv_indel_header;
     if ( %$snv_indels ) {
         for my $variant ( sort{ versioncmp( $a, $b ) } keys %$snv_indels ) {
+            # TODO: how to print this?
             printf $snv_indel_format, @{$$snv_indels{$variant}};
         }
     } else {
-        print colored(">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n", "red on_black");
+        print_msg(">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n", "red on_black");
     }
-    print "\n";
+    #print "\n";
+    print_msg("\n", undef);
+
+    exit;
 
     #########################
     ##   Fusions Output    ##
