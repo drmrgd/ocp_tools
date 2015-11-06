@@ -379,6 +379,8 @@ sub proc_fusion {
 
         my $fid = join( '|', $pair, $junct, $id );
         
+        # TODO:
+        #     Need to fix this if the call is novel and there is no defined driver gene reported.
         if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
             $fusion_data{$fid}->{'DRIVER'} = $fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
         }
@@ -388,6 +390,9 @@ sub proc_fusion {
         else {
             $fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
         }
+
+        $fusion_data{$fid}->{'DRIVER'}  //= 'UNKNOWN';
+        $fusion_data{$fid}->{'PARTNER'} //= 'UNKNOWN';
 
         $fusion_data{$fid}->{'COUNT'} = $$variant_info{'INFO...READ_COUNT'};
     }
