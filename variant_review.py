@@ -11,7 +11,7 @@ import fnmatch
 from time import sleep
 from pprint import pprint
 
-version = '1.1.2_102915'
+version = '1.2.0_110615'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -170,9 +170,8 @@ def gen_moi_report(msn,vcf):
     filename = msn + '_MATCH_MOI_Report.txt'
 
     print "Generating a MATCH MOI Report for {}...".format(msn),
-    # TODO: Come up with way to stream output and write a file.  Maybe need to write it with this function?
-    #p=subprocess.Popen(['match_moi_report.pl', '-o', filename, vcf], stdout=subprocess.PIPE)
-    p=subprocess.Popen(['match_moi_report.pl', vcf], stdout=subprocess.PIPE)
+    #p=subprocess.Popen(['match_moi_report.pl', vcf], stdout=subprocess.PIPE)
+    p=subprocess.Popen(['match_moi_report.pl', '-o', filename, vcf], stdout=subprocess.PIPE)
     result,error = p.communicate()
     print "Done!\n"
     print result.decode('ascii')
