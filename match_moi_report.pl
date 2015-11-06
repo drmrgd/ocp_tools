@@ -379,9 +379,13 @@ sub proc_fusion {
 
         my $fid = join( '|', $pair, $junct, $id );
         
-        if ( grep{ $_ eq $$variant_info{'FUNC1.gene'} } @drivers ) {
+        if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
+            $fusion_data{$fid}->{'DRIVER'} = $fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
+        }
+        elsif ( grep{ $_ eq $$variant_info{'FUNC1.gene'} } @drivers ) {
             $fusion_data{$fid}->{'DRIVER'} = $$variant_info{'FUNC1.gene'};
-        } else {
+        } 
+        else {
             $fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
         }
 
@@ -481,6 +485,31 @@ sub gen_report {
     }
     print_msg("\n");
 
+
+    ########################
+    ##  CNV Result Ouput  ##
+    ########################
+    my @formatted_mapd;
+    ($mapd >= 0.9) ? 
+        (@formatted_mapd = ("**$mapd**", 'bold red on_black')) : 
+        (@formatted_mapd = ($mapd,'ansi3'));
+
+    print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
+    print_msg(@formatted_mapd);
+    print_msg( ", CN >= $cn_cutoff) :::\n", "ansi3");
+
+    my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
+    my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
+    print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
+    if ( %$cnv_data ) {
+        for my $cnv ( sort{ versioncmp( $cnv_data{$a}->[0], $cnv_data{$b}->[0] ) } keys %$cnv_data ) {
+            print_msg(sprintf($cnv_format, $cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
+        }
+    } else {
+        print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
+    }
+    print_msg("\n");
+
     #########################
     ##   Fusions Output    ##
     #########################
@@ -514,30 +543,6 @@ sub gen_report {
         }
     } else {
         print_msg(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
-    }
-    print_msg("\n");
-
-    ########################
-    ##  CNV Result Ouput  ##
-    ########################
-    my @formatted_mapd;
-    ($mapd >= 0.9) ? 
-        (@formatted_mapd = ("**$mapd**", 'bold red on_black')) : 
-        (@formatted_mapd = ($mapd,'ansi3'));
-
-    print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
-    print_msg(@formatted_mapd);
-    print_msg( ", CN >= $cn_cutoff) :::\n", "ansi3");
-
-    my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
-    my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
-    print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
-    if ( %$cnv_data ) {
-        for my $cnv ( sort{ versioncmp( $cnv_data{$a}->[0], $cnv_data{$b}->[0] ) } keys %$cnv_data ) {
-            print_msg(sprintf($cnv_format, $cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
-        }
-    } else {
-        print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
     }
     return;
 }
