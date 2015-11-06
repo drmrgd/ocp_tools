@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 # Parse a VCF file and generate a table of MOIs and aMOIs
 #
+# TODO:
+#   - map fusion driver / partner genes to specific ones.
 # 2/12/2014 - D Sims
 ###################################################################################################
 use warnings;
@@ -27,7 +29,7 @@ print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.9.3_110415-dev";
+my $version = "v2.9.7_110515-dev";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -77,22 +79,16 @@ if ( scalar( @ARGV ) < 1 ) {
 
 # Write output to either indicated file or STDOUT
 my $out_fh;
-#my $output;
 if ( $outfile ) {
     #print "Writing results to $outfile...\n";
     open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
-    #$output = IO::Tee->new(\*STDOUT,$out_fh);
 }
-#} else {
-	#$out_fh = \*STDOUT;
-#}
 
 if (DEBUG) {
     print "======================================  DEBUG  ======================================\n";
     print "Params as passed into script:\n";
     print "\tCNV Threshold  => $cn_cutoff\n";
     print "\tVAF Threshold  => $freq_cutoff\n";
-    #print "\tOutput File    => $out_fh\n";
     print "\tOutput File    => $outfile\n";
     print "=====================================================================================\n\n";
 }
@@ -107,13 +103,15 @@ my (%snv_indel_data, %fusion_data, %cnv_data, %ipc_data);
 for my $variant (@$variant_data) {
     my $type = $$variant{'rowtype'};
     given ($type) {
-        when (/([ms]np|ins|del|complex)/) { proc_snv_indel( $variant ) }
+        #when (/([ms]np|ins|del|complex)/) { proc_snv_indel( $variant ) }
         when (/Fusion/)                   { proc_fusion( $variant ) }
-        when (/CNV/)                      { proc_cnv( $variant ) }
-        when (/ExprControl/)              { proc_ipc( $variant) }
+        #when (/CNV/)                      { proc_cnv( $variant ) }
+        #when (/ExprControl/)              { proc_ipc( $variant) }
         default                           {next}
     }
 }
+
+# XXX
 
 my $expr_control_sum = 0;
 $expr_control_sum += $ipc_data{$_} for keys %ipc_data;
@@ -130,12 +128,10 @@ sub read_vcf {
 
     # Print out a nice title for the report based on the DNA and RNA sample name to make it nicer
     my ($dna_name, $rna_name) = $$input_file =~ /^(?:.*\/)?(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
-
-    #print {$output} "NCI-MATCH MOI Report for ";
-    #(! $dna_name || ! $rna_name) ? print {$output} "$$input_file\n" : print {$output} "$dna_name DNA / $rna_name RNA\n"; 
-
-    print_msg("NCI-MATCH MOI Report for ", undef);
-    (! $dna_name || ! $rna_name) ? print_msg("$$input_file\n", undef) : print_msg("$dna_name DNA / $rna_name RNA\n", undef); 
+    print_msg("NCI-MATCH MOI Report for ");
+    (! $dna_name || ! $rna_name) ? print_msg("$$input_file\n") : print_msg("$dna_name DNA / $rna_name RNA\n"); 
+    print_msg('-'x150);
+    print_msg("\n\n");
 
     # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to read the VCF twice it looks like
     open( my $vcf_fh, "<", $$input_file );
@@ -261,7 +257,6 @@ sub proc_snv_indel {
     
     # Added to prevent missing long indel assembler calls.
     my $vaf;
-    #if ( ! $info_af || $info_af eq '.'  ) {
     if ( $info_af !~ /\d+/ ) { 
         $vaf = $ao / ($ro + $ao);
     } else {
@@ -362,10 +357,18 @@ sub gen_var_entry {
 sub proc_fusion {
     # Generate Hash of fusion data for output later.
     my $variant_info = shift;
-    if ( $$variant_info{'call'} eq 'POS' ) { 
+    my @drivers = qw( ABL1 AKT3 ALK AXL BRAF CDK4 EGFR ERBB2 ERG ETV1 ETV4 ETV5 FGFR1 FGFR2 FGFR3 NTRK1 NTRK3 PDGFRA PPARG
+                      RAF1 RET ROS);
+
+    #if ( $$variant_info{'call'} eq 'POS' ) { 
+    if ( $$variant_info{'call'} ) { 
         my ($name, $elem) = $$variant_info{'ID'} =~ /(.*?)_([12])/;
         my ($pair, $junct, $id) = split( /\./, $name );
-        $id = 'NOVEL' unless $id;
+        $id //= '-';
+        #print "name:    $name\n";
+        #print "pair:    $pair\n";
+        #print "junct:   $junct\n";
+        #print "id:      $id\n";
 
         # Get rid of Fusions that are below our thresholds
         if ( $id eq 'DelPositive' ) {
@@ -376,12 +379,19 @@ sub proc_fusion {
 
         my $fid = join( '|', $pair, $junct, $id );
         
-        $fusion_data{$fid}->{'COUNT'} = $$variant_info{'INFO...READ_COUNT'};
-        if ( $elem == 2 ) {
+        #if ( $elem == 2 ) {
+            #$fusion_data{$fid}->{'DRIVER'} = $$variant_info{'FUNC1.gene'};
+        #} else {
+            #$fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
+        #}
+
+        if ( grep{ $_ eq $$variant_info{'FUNC1.gene'} } @drivers ) {
             $fusion_data{$fid}->{'DRIVER'} = $$variant_info{'FUNC1.gene'};
         } else {
             $fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
         }
+
+        $fusion_data{$fid}->{'COUNT'} = $$variant_info{'INFO...READ_COUNT'};
     }
     return;
 }
@@ -442,21 +452,12 @@ sub field_width {
 
 sub print_msg {
     # Kludgy way to simulate tee, but with and without colored output (ANSI escape codes in .txt files not helpful!
-    # TODO: some output is printf output for column info.  How can I accomdate this and / or colored output.  too m
-    #       many collisions here!
-    # XXX
     my ($msg, $format) = @_;
 
-    #my $text_format = $format // '...';
-    #print "========================  DEBUG  ========================\n";
-    #print "Text:   $msg\n";
-    #print "Format: $text_format\n";
-    #print "=========================================================\n";
-    
-    # print to the output file
+    # To outfile
     print {$out_fh} $msg if $outfile;
 
-    # print to stdout, either colored or not.
+    # To STDOUT
     ($format) ? print colored($msg, $format) : print $msg;
     return;
 }
@@ -464,93 +465,96 @@ sub print_msg {
 sub gen_report {
     # Print out the final MOI Report
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
-
     my ($w1, $w2, $w3, $w4);
 
-    # TODO: remove me!
-    #select $output;
 
     #########################
     ## SNV / Indel Output  ##
     #########################
-    #print colored("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
-    print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n", "green on_black");
+    print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n");
     ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
     my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript HGVS Protein oncomineGeneClass 
                                oncomineVariantClass Functional_Rule );
     my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-16s %-${w4}s %-16s %-21s %-22s %-21s\n";
 
-    # TODO: how to print header?
-    printf $snv_indel_format, @snv_indel_header;
+    print_msg(sprintf($snv_indel_format, @snv_indel_header));
     if ( %$snv_indels ) {
         for my $variant ( sort{ versioncmp( $a, $b ) } keys %$snv_indels ) {
-            # TODO: how to print this?
-            printf $snv_indel_format, @{$$snv_indels{$variant}};
+            print_msg(sprintf($snv_indel_format, @{$$snv_indels{$variant}}));
         }
     } else {
         print_msg(">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n", "red on_black");
     }
-    #print "\n";
-    print_msg("\n", undef);
-
-    exit;
+    print_msg("\n");
 
     #########################
     ##   Fusions Output    ##
     #########################
-    my $read_count;
+    my @read_count;
     ($tot_rna_reads < 100000) ? 
-        ($read_count = colored($tot_rna_reads, 'bold red on_black')) : 
-        ($read_count = colored($tot_rna_reads, 'green on_black'));
+        (@read_count = ("**$tot_rna_reads**", 'bold red on_black')) : 
+        #(@read_count = ($tot_rna_reads, 'green on_black'));
+        (@read_count = ($tot_rna_reads)); 
 
     my $ipc_reads = $$fusion_data{'EXPR_CTRL'};
     delete $$fusion_data{'EXPR_CTRL'};
-    my $ipc_output;
-    ($ipc_reads < 20000) ? 
-        ($ipc_output = colored($ipc_reads, 'bold red on_black')) : 
-        ($ipc_output = colored($ipc_reads, 'green on_black'));
 
-    print colored("::: MATCH Reportable Fusions (Total Reads: ", 'green on_black');
-    print $read_count;
-    print colored(', Sum Expression Control Reads: ', 'green on_black');
-    print $ipc_output;
-    print colored( ") :::\n", "green on_black");
+    my @ipc_output;
+    ($ipc_reads < 20000) ? 
+        (@ipc_output = ("**$ipc_reads**", 'bold red on_black')) : 
+        #(@ipc_output = ($ipc_reads, 'green on_black'));
+        (@ipc_output = ($ipc_reads));
+
+    #print_msg("::: MATCH Reportable Fusions (Total Reads: ", 'green on_black');
+    print_msg("::: MATCH Reportable Fusions (Total Reads: ");
+    print_msg(@read_count);
+    #print_msg(', Sum Expression Control Reads: ', 'green on_black');
+    print_msg(', Sum Expression Control Reads: ');
+    print_msg(@ipc_output);
+    #print_msg( ") :::\n", "green on_black");
+    print_msg( ") :::\n");
 
     ($w1) = field_width( $fusion_data, 'fusion' );
     my $fusion_format = "%-${w1}s %-12s %-12s %-15s %-15s\n";
     my @fusion_header = qw( Fusion ID Read_Count Driver_Gene Partner_Gene );
-    printf $fusion_format, @fusion_header;
+    print_msg(sprintf($fusion_format, @fusion_header));
     if ( %$fusion_data ) {
         for ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
             my ($fusion, $junct, $id) = split( /\|/ );
-            printf $fusion_format, "$fusion.$junct", $id, $fusion_data{$_}->{'COUNT'}, $fusion_data{$_}->{'DRIVER'}, $fusion_data{$_}->{'PARTNER'};
+            print_msg(sprintf($fusion_format, "$fusion.$junct", $id, $fusion_data{$_}->{'COUNT'}, $fusion_data{$_}->{'DRIVER'}, $fusion_data{$_}->{'PARTNER'}));
         }
     } else {
-        print colored(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
+        print_msg(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
     }
-    print "\n";
+    print_msg("\n");
 
     ########################
     ##  CNV Result Ouput  ##
     ########################
-    my $formatted_mapd;
+    my @formatted_mapd;
     ($mapd >= 0.9) ? 
-        ($formatted_mapd = colored($mapd, 'bold red on_black')) : 
-        ($formatted_mapd = colored($mapd, 'green on_black'));
+        (@formatted_mapd = ("**$mapd**", 'bold red on_black')) : 
+        #(@formatted_mapd = ($mapd, 'green on_black'));
+        (@formatted_mapd = ($mapd));
 
-    print colored("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'green on_black');
-    print $formatted_mapd;
-    print colored( ", CN >= $cn_cutoff) :::\n", "green on_black");
+    #print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'green on_black');
+    print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ");
+    print_msg(@formatted_mapd);
+    #print_msg( ", CN >= $cn_cutoff) :::\n", "green on_black");
+    print_msg( ", CN >= $cn_cutoff) :::\n");
 
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
-    printf "%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header;
+    print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
     if ( %$cnv_data ) {
         for my $cnv ( sort{ versioncmp( $cnv_data{$a}->[0], $cnv_data{$b}->[0] ) } keys %$cnv_data ) {
-            printf $cnv_format, $cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4];
+            print_msg(sprintf($cnv_format, $cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
         }
     } else {
-        print colored(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
+        print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
     }
+
+    print_msg('-'x150);
+    print_msg("\n");
     return;
 }
