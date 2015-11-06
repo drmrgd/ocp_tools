@@ -1,8 +1,6 @@
 #!/usr/bin/perl
 # Parse a VCF file and generate a table of MOIs and aMOIs
 #
-# TODO:
-#   - map fusion driver / partner genes to specific ones.
 # 2/12/2014 - D Sims
 ###################################################################################################
 use warnings;
@@ -19,17 +17,16 @@ use File::Basename;
 use Sort::Versions;
 use Term::ANSIColor;
 use Data::Dump;
-use IO::Tee;
 
 # Remove when in prod.
 print "\n";
-print colored("*" x 50, 'bold yellow on_black');
-print colored("\n    DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
+print colored("*" x 50, 'bold yellow on_black'), "\n";
+print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
 print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.9.7_110515-dev";
+my $version = "v2.9.9_110615-dev";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -89,7 +86,8 @@ if (DEBUG) {
     print "Params as passed into script:\n";
     print "\tCNV Threshold  => $cn_cutoff\n";
     print "\tVAF Threshold  => $freq_cutoff\n";
-    print "\tOutput File    => $outfile\n";
+    print "\tOutput File    => ";
+    ($outfile) ? print " $outfile\n" : print "\n";
     print "=====================================================================================\n\n";
 }
 
@@ -103,15 +101,13 @@ my (%snv_indel_data, %fusion_data, %cnv_data, %ipc_data);
 for my $variant (@$variant_data) {
     my $type = $$variant{'rowtype'};
     given ($type) {
-        #when (/([ms]np|ins|del|complex)/) { proc_snv_indel( $variant ) }
+        when (/([ms]np|ins|del|complex)/) { proc_snv_indel( $variant ) }
         when (/Fusion/)                   { proc_fusion( $variant ) }
-        #when (/CNV/)                      { proc_cnv( $variant ) }
-        #when (/ExprControl/)              { proc_ipc( $variant) }
+        when (/CNV/)                      { proc_cnv( $variant ) }
+        when (/ExprControl/)              { proc_ipc( $variant) }
         default                           {next}
     }
 }
-
-# XXX
 
 my $expr_control_sum = 0;
 $expr_control_sum += $ipc_data{$_} for keys %ipc_data;
@@ -128,10 +124,10 @@ sub read_vcf {
 
     # Print out a nice title for the report based on the DNA and RNA sample name to make it nicer
     my ($dna_name, $rna_name) = $$input_file =~ /^(?:.*\/)?(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
-    print_msg("NCI-MATCH MOI Report for ");
-    (! $dna_name || ! $rna_name) ? print_msg("$$input_file\n") : print_msg("$dna_name DNA / $rna_name RNA\n"); 
-    print_msg('-'x150);
-    print_msg("\n\n");
+    print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
+    print_msg("NCI-MATCH MOI Report for ",'bold ansi15');
+    (! $dna_name || ! $rna_name) ? print_msg("$$input_file\n",'bold ansi15') : print_msg("$dna_name DNA / $rna_name RNA\n",'bold ansi15'); 
+    print_msg(sprintf("%s\n", '-'x150), 'bold ansi15');
 
     # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to read the VCF twice it looks like
     open( my $vcf_fh, "<", $$input_file );
@@ -189,7 +185,7 @@ sub filter_raw_data {
                                INFO.A.FAO POS REF FORMAT.1.CN INFO...CI INFO.1.RO INFO.A.AO FUNC1.coding FUNC1.exon 
                                FUNC1.gene FUNC1.normalizedAlt FUNC1.normalizedRef FUNC1.normalizedPos 
                                FUNC1.oncomineGeneClass FUNC1.oncomineVariantClass FUNC1.protein FUNC1.transcript 
-                               FUNC1.location FUNC1.function );
+                               FUNC1.location FUNC1.function INFO.1.ANNOTATION );
     my %wanted_keys = map { $_ => '' } @wanted_vcf_elems;
     
     @filtered_data{keys %wanted_keys} = @$raw_data{keys %wanted_keys};
@@ -360,15 +356,19 @@ sub proc_fusion {
     my @drivers = qw( ABL1 AKT3 ALK AXL BRAF CDK4 EGFR ERBB2 ERG ETV1 ETV4 ETV5 FGFR1 FGFR2 FGFR3 NTRK1 NTRK3 PDGFRA PPARG
                       RAF1 RET ROS);
 
-    #if ( $$variant_info{'call'} eq 'POS' ) { 
-    if ( $$variant_info{'call'} ) { 
-        my ($name, $elem) = $$variant_info{'ID'} =~ /(.*?)_([12])/;
+    if ( $$variant_info{'call'} eq 'POS' ) { 
+        my ($name, $elem) = $$variant_info{'ID'} =~ /(.*)_([12])$/;
         my ($pair, $junct, $id) = split( /\./, $name );
         $id //= '-';
-        #print "name:    $name\n";
-        #print "pair:    $pair\n";
-        #print "junct:   $junct\n";
-        #print "id:      $id\n";
+
+        #print "$$variant_info{'ID'}  => \n";
+        #print "\tname:  $name\n";
+        #print "\tpair:  $pair\n";
+        #print "\tjunct: $junct\n";
+        #print "\tID:    $$variant_info{'INFO.1.ANNOTATION'}\n";
+        #print "\toID:   $id\n";
+        #print '-'x50;
+        #print "\n";
 
         # Get rid of Fusions that are below our thresholds
         if ( $id eq 'DelPositive' ) {
@@ -379,12 +379,6 @@ sub proc_fusion {
 
         my $fid = join( '|', $pair, $junct, $id );
         
-        #if ( $elem == 2 ) {
-            #$fusion_data{$fid}->{'DRIVER'} = $$variant_info{'FUNC1.gene'};
-        #} else {
-            #$fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
-        #}
-
         if ( grep{ $_ eq $$variant_info{'FUNC1.gene'} } @drivers ) {
             $fusion_data{$fid}->{'DRIVER'} = $$variant_info{'FUNC1.gene'};
         } else {
@@ -471,7 +465,7 @@ sub gen_report {
     #########################
     ## SNV / Indel Output  ##
     #########################
-    print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n");
+    print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n",'ansi3');
     ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
     my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript HGVS Protein oncomineGeneClass 
                                oncomineVariantClass Functional_Rule );
@@ -493,8 +487,7 @@ sub gen_report {
     my @read_count;
     ($tot_rna_reads < 100000) ? 
         (@read_count = ("**$tot_rna_reads**", 'bold red on_black')) : 
-        #(@read_count = ($tot_rna_reads, 'green on_black'));
-        (@read_count = ($tot_rna_reads)); 
+        (@read_count = ($tot_rna_reads,'ansi3')); 
 
     my $ipc_reads = $$fusion_data{'EXPR_CTRL'};
     delete $$fusion_data{'EXPR_CTRL'};
@@ -502,17 +495,13 @@ sub gen_report {
     my @ipc_output;
     ($ipc_reads < 20000) ? 
         (@ipc_output = ("**$ipc_reads**", 'bold red on_black')) : 
-        #(@ipc_output = ($ipc_reads, 'green on_black'));
-        (@ipc_output = ($ipc_reads));
+        (@ipc_output = ($ipc_reads, 'ansi3'));
 
-    #print_msg("::: MATCH Reportable Fusions (Total Reads: ", 'green on_black');
-    print_msg("::: MATCH Reportable Fusions (Total Reads: ");
+    print_msg("::: MATCH Reportable Fusions (Total Reads: ",'ansi3');
     print_msg(@read_count);
-    #print_msg(', Sum Expression Control Reads: ', 'green on_black');
-    print_msg(', Sum Expression Control Reads: ');
+    print_msg(', Sum Expression Control Reads: ','ansi3');
     print_msg(@ipc_output);
-    #print_msg( ") :::\n", "green on_black");
-    print_msg( ") :::\n");
+    print_msg( ") :::\n",'ansi3');
 
     ($w1) = field_width( $fusion_data, 'fusion' );
     my $fusion_format = "%-${w1}s %-12s %-12s %-15s %-15s\n";
@@ -534,14 +523,11 @@ sub gen_report {
     my @formatted_mapd;
     ($mapd >= 0.9) ? 
         (@formatted_mapd = ("**$mapd**", 'bold red on_black')) : 
-        #(@formatted_mapd = ($mapd, 'green on_black'));
-        (@formatted_mapd = ($mapd));
+        (@formatted_mapd = ($mapd,'ansi3'));
 
-    #print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'green on_black');
-    print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ");
+    print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
     print_msg(@formatted_mapd);
-    #print_msg( ", CN >= $cn_cutoff) :::\n", "green on_black");
-    print_msg( ", CN >= $cn_cutoff) :::\n");
+    print_msg( ", CN >= $cn_cutoff) :::\n", "ansi3");
 
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
@@ -553,8 +539,5 @@ sub gen_report {
     } else {
         print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
     }
-
-    print_msg('-'x150);
-    print_msg("\n");
     return;
 }
