@@ -100,18 +100,16 @@ for my $input_file ( @files ) {
             if ( $count == 0 ) { next unless ( $ref_calls ) }
             my $fid = join('|', $pair, $junct, $id);
 
-            print "$data[2]  => \n";
-            print "\tname:  $name\n";
+            #print "$data[2]  => \n";
+            #print "\tname:  $name\n";
             #print "\tgene:  $gene\n";
-            print "\tgene1: $gene1\n";
-            print "\tgene2: $gene2\n";
-            print "\tpair:  $pair\n";
-            print "\tjunct: $junct\n";
-            print "\tID:   $id\n";
-            print '-'x50;
-            print "\n";
-
-
+            #print "\tgene1: $gene1\n";
+            #print "\tgene2: $gene2\n";
+            #print "\tpair:  $pair\n";
+            #print "\tjunct: $junct\n";
+            #print "\tID:   $id\n";
+            #print '-'x50;
+            #print "\n";
 
             if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
                 $results{$sample_name}->{$fid}->{'DRIVER'} = $results{$sample_name}->{$fid}->{'PARTNER'} = $gene1;
