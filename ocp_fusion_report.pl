@@ -14,7 +14,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.2.0_100915";
+my $version = "v1.3.0_100915";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -89,26 +89,48 @@ for my $input_file ( @files ) {
         my @data = split;
         if ( grep { /Fusion/ } @data ) {
             my ( $name, $elem ) = $data[2] =~ /(.*?)_([12])$/;
-            my ($count, $gene) = map { /READ_COUNT=(\d+);GENE_NAME=(.*?);/ } @data;
+            #my ($count, $gene) = map { /READ_COUNT=(\d+);GENE_NAME=(.*?);/ } @data;
+            my ($count) = map { /READ_COUNT=(\d+)/ } @data;
             my ($pair, $junct, $id) = split(/\./, $name);
             $id //= '-';
+
+            my ($gene1, $gene2) = split(/-/, $pair);
 
             # Filter out ref calls if we don't want to view them
             if ( $count == 0 ) { next unless ( $ref_calls ) }
             my $fid = join('|', $pair, $junct, $id);
 
+            print "$data[2]  => \n";
+            print "\tname:  $name\n";
+            #print "\tgene:  $gene\n";
+            print "\tgene1: $gene1\n";
+            print "\tgene2: $gene2\n";
+            print "\tpair:  $pair\n";
+            print "\tjunct: $junct\n";
+            print "\tID:   $id\n";
+            print '-'x50;
+            print "\n";
+
+
+
             if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
-                $results{$sample_name}->{$fid}->{'DRIVER'} = $results{$sample_name}->{$fid}->{'PARTNER'} = $gene;
+                $results{$sample_name}->{$fid}->{'DRIVER'} = $results{$sample_name}->{$fid}->{'PARTNER'} = $gene1;
             }
-            elsif (grep {$_ eq $gene} @drivers) {
-                $results{$sample_name}->{$fid}->{'DRIVER'} = $gene;
+            elsif (grep {$_ eq $gene1} @drivers) {
+                $results{$sample_name}->{$fid}->{'DRIVER'} = $gene1;
+                $results{$sample_name}->{$fid}->{'PARTNER'} = $gene2;
+            }
+            elsif (grep {$_ eq $gene2} @drivers) {
+                $results{$sample_name}->{$fid}->{'DRIVER'} = $gene2;
+                $results{$sample_name}->{$fid}->{'PARTNER'} = $gene1;
             }
             else {
-                $results{$sample_name}->{$fid}->{'PARTNER'} = $gene;
+                $results{$sample_name}->{$fid}->{'DRIVER'} = 'UNKNOWN';
+                $results{$sample_name}->{$fid}->{'PARTNER'} = "$gene1,$gene2";
             }
-            $results{$sample_name}->{$fid}->{'DRIVER'}  //= 'UNKNOWN';
-
             $results{$sample_name}->{$fid}->{'COUNT'} = $count;
+
+            # Get some field width formatting.
             $fwidth = (length($name)+4) if ( length($name) > $fwidth );
         }
     }
