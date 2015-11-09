@@ -11,9 +11,10 @@ use strict;
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
 use Data::Dump;
+use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v0.8.1_010815";
+my $version = "v1.1.0_100915-dev";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -73,41 +74,48 @@ if ( $outfile ) {
 my @files = @ARGV;
 
 #######===========================  END ARG Parsing  #######=========================== 
-
 my %results;
 my $fwidth=0;
+my @drivers = qw( ABL1 AKT2 ALK AXL BRAF CDK4 EGFR ERBB2 ERG ETV1 ETV4 ETV5 FGFR1 FGFR2 FGFR3 NTRK1 NTRK3 PDFGFRA
+                  PPARG RAF1 RET ROS);
+
 for my $input_file ( @files ) {
-    (my $name = $input_file) =~ s/(:?_Fusion_filtered)?\.vcf$//i;
-    $name =~ s/_RNA//;
+    (my $sample_name = $input_file) =~ s/(:?_Fusion_filtered)?\.vcf$//i;
+    $sample_name =~ s/_RNA//;
 
     open( my $in_fh, "<", $input_file ) || die "Can't open the file '$input_file' for reading: $!";
     while (<$in_fh>) {
         next if /^#/;
         my @data = split;
         if ( grep { /Fusion/ } @data ) {
-            my ( $fname, $felem ) = $data[2] =~ /(.*?)_([12])$/;
+            my ( $name, $elem ) = $data[2] =~ /(.*?)_([12])$/;
             my ($count, $gene) = map { /READ_COUNT=(\d+);GENE_NAME=(.*?);/ } @data;
+            my ($pair, $junct, $id) = split(/\./, $name);
+            $id //= '-';
 
             # Filter out ref calls if we don't want to view them
             if ( $count == 0 ) { next unless ( $ref_calls ) }
+            my $fid = join('|', $pair, $junct, $id);
 
-            my ($annot) = map { /ANNOTATION=(.*);FUNC/ } @data;
-            $annot //= 'NOVEL';
-            my $fid = join( '|', $fname, $annot );
-
-            if ( $felem == 2 ) {
-                $results{$name}->{$fid}->{'DRIVER'} = [$gene, $count];
-            } else {
-                $results{$name}->{$fid}->{'PARTNER'} = [$gene, $count];
+            if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
+                $results{$sample_name}->{$fid}->{'DRIVER'} = $results{$sample_name}->{$fid}->{'PARTNER'} = $gene;
             }
+            elsif (grep {$_ eq $gene} @drivers) {
+                $results{$sample_name}->{$fid}->{'DRIVER'} = $gene;
+            }
+            else {
+                $results{$sample_name}->{$fid}->{'PARTNER'} = $gene;
+            }
+            $results{$sample_name}->{$fid}->{'DRIVER'}  //= 'UNKNOWN';
 
-            # Get dynamic field width for fusion ID for the final output table
-            $fwidth = (length($fname)+4) if ( length($fname) > $fwidth );
+            $results{$sample_name}->{$fid}->{'COUNT'} = $count;
+            $fwidth = (length($name)+4) if ( length($name) > $fwidth );
         }
     }
+
     # At least generate a hash entry for a sample with no fusions for the final output table below
-    if ( ! $results{$name} ) {
-        $results{$name} = undef;
+    if ( ! $results{$sample_name} ) {
+        $results{$sample_name} = undef;
     }
 }
 
@@ -119,13 +127,13 @@ select $out_fh;
 for my $sample ( sort keys %results ) {
     print "::: Fusions in $sample :::\n\n";
     if ( $results{$sample} ) {
-        printf "%-${fwidth}s %12s %24s\n", ' ', 'Driver', 'Partner'; 
-        printf "%-${fwidth}s%-15s %-8s %-15s %-8s %-8s\n", qw( Fusion Gene Count Gene Count Annot );
-        for my $fusion ( sort keys %{$results{$sample}} ) {
-            my ($fus_id, $annot) = split( /\|/, $fusion );
-            next if ( $annot eq 'NOVEL' && ! $novel );
-            printf "%-${fwidth}s", $fus_id;
-            printf "%-15s %-8s %-15s %-8s %-8s\n", @{$results{$sample}->{$fusion}->{'DRIVER'}}, @{$results{$sample}->{$fusion}->{'PARTNER'}}, $annot;
+
+        my $fusion_format = "%-${fwidth}s %-12s %-12s %-15s %-15s\n";
+        my @fusion_header = qw (Fusion ID Read_Count Driver_Gene Partner_Gene);
+        printf $fusion_format, @fusion_header;
+        for (sort { versioncmp($a,$b) } keys %{$results{$sample}} ) {
+            my ($fusion, $junct, $id ) = split(/\|/);
+            printf $fusion_format, "$fusion.$junct", $id, $results{$sample}->{$_}->{'COUNT'}, $results{$sample}->{$_}->{'DRIVER'}, $results{$sample}->{$_}->{'PARTNER'};
         }
         print "\n";
     } else {
