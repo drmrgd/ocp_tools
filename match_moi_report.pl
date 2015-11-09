@@ -26,7 +26,7 @@ print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.9.9_110615-dev";
+my $version = "v2.9.11_110915-dev";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -353,16 +353,22 @@ sub gen_var_entry {
 sub proc_fusion {
     # Generate Hash of fusion data for output later.
     my $variant_info = shift;
-    my @drivers = qw( ABL1 AKT3 ALK AXL BRAF CDK4 EGFR ERBB2 ERG ETV1 ETV4 ETV5 FGFR1 FGFR2 FGFR3 NTRK1 NTRK3 PDGFRA PPARG
-                      RAF1 RET ROS);
+    my @drivers = qw( ABL1 AKT3 ALK AXL BRAF CDK4 EGFR ERBB2 ERG ETV1 ETV1a ETV1b ETV4 ETV4a ETV5 ETV5a ETV5b ETV5d 
+                      FGFR1 FGFR2 FGFR3 MET NTRK1 NTRK2 NTRK3 PDGFRA PPARG RAF1 RET ROS1);
 
     if ( $$variant_info{'call'} eq 'POS' ) { 
         my ($name, $elem) = $$variant_info{'ID'} =~ /(.*)_([12])$/;
         my ($pair, $junct, $id) = split( /\./, $name );
         $id //= '-';
 
+        # Don't use FUNC1.gene; not reliable.
+        my ($gene1, $gene2) = split(/-/,$pair);
+
         #print "$$variant_info{'ID'}  => \n";
         #print "\tname:  $name\n";
+        #print "\tgene:  $$variant_info{'FUNC1.gene'}\n";
+        #print "\tgene1: $gene1\n";
+        #print "\tgene2: $gene2\n";
         #print "\tpair:  $pair\n";
         #print "\tjunct: $junct\n";
         #print "\tID:    $$variant_info{'INFO.1.ANNOTATION'}\n";
@@ -379,21 +385,23 @@ sub proc_fusion {
 
         my $fid = join( '|', $pair, $junct, $id );
         
-        # TODO:
-        #     Need to fix this if the call is novel and there is no defined driver gene reported.
+        # No direct mapping of driver / partner for fusions, and sometimes we get cases of two drivers (ie
+        # not noted kinase drivers) indicated in the fusion.  So, have to parse a little more robustly.
         if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
             $fusion_data{$fid}->{'DRIVER'} = $fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
         }
-        elsif ( grep{ $_ eq $$variant_info{'FUNC1.gene'} } @drivers ) {
-            $fusion_data{$fid}->{'DRIVER'} = $$variant_info{'FUNC1.gene'};
+        elsif ( grep{ $_ eq $gene1 } @drivers ) {
+            $fusion_data{$fid}->{'DRIVER'} = $gene1;
+            $fusion_data{$fid}->{'PARTNER'} = $gene2;
         } 
-        else {
-            $fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
+        elsif (grep{ $_ eq $gene2} @drivers) {
+            $fusion_data{$fid}->{'PARTNER'} = $gene1;
+            $fusion_data{$fid}->{'DRIVER'} = $gene2;
         }
-
-        $fusion_data{$fid}->{'DRIVER'}  //= 'UNKNOWN';
-        $fusion_data{$fid}->{'PARTNER'} //= 'UNKNOWN';
-
+        else {
+            $fusion_data{$fid}->{'DRIVER'}  = 'UNKNOWN';
+            $fusion_data{$fid}->{'PARTNER'} = "$gene1,$gene2";
+        }
         $fusion_data{$fid}->{'COUNT'} = $$variant_info{'INFO...READ_COUNT'};
     }
     return;
@@ -456,11 +464,7 @@ sub field_width {
 sub print_msg {
     # Kludgy way to simulate tee, but with and without colored output (ANSI escape codes in .txt files not helpful!
     my ($msg, $format) = @_;
-
-    # To outfile
     print {$out_fh} $msg if $outfile;
-
-    # To STDOUT
     ($format) ? print colored($msg, $format) : print $msg;
     return;
 }
@@ -489,7 +493,6 @@ sub gen_report {
         print_msg(">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n", "red on_black");
     }
     print_msg("\n");
-
 
     ########################
     ##  CNV Result Ouput  ##
