@@ -19,14 +19,14 @@ use Term::ANSIColor;
 use Data::Dump;
 
 # Remove when in prod.
-print "\n";
-print colored("*" x 50, 'bold yellow on_black'), "\n";
-print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
-print colored("*" x 50, 'bold yellow on_black');
-print "\n\n";
+#print "\n";
+#print colored("*" x 50, 'bold yellow on_black'), "\n";
+#print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
+#print colored("*" x 50, 'bold yellow on_black');
+#print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.9.11_110915-dev";
+my $version = "v3.0.0_111015";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
