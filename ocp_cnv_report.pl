@@ -12,8 +12,10 @@ use Sort::Versions;
 use JSON -support_by_pp;
 use Data::Dump;
 
+use constant DEBUG => 0;
+
 my $scriptname = basename($0);
-my $version = "v0.8.2_010515";
+my $version = "v1.2.0_122215-dev";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -120,14 +122,23 @@ for my $input_file (@vcfs) {
         next unless $data[4] eq '<CNV>';
         my $varid = join( ':', @data[0..3] );
         
-        # Kludgy, but need to deal with HS field; not like others!
+        # Kludgy, but need to deal with hotspots (HS) field; not like others!
         $data[7] =~ s/HS/HS=Yes/;
+        $data[7] =~ s/SD;/SD=NA;/; # sometimes data in this field and sometimes not.  
+
         my @format = split( /;/, $data[7] );
         my ($cn) = $data[9] =~ /:([^:]+)$/;
         push( @format, "CN=$cn" );
 
-        #%{$cnv_data{$sample_name}->{$varid}} = map { split /=/ } @format;
         %{$cnv_data{join( ':', $sample_name, $gender, $mapd, $cellularity )}->{$varid}} = map { split /=/ } @format;
+    }
+    if (DEBUG) {
+        print "="x40, "  DEBUG  ", "="x40, "\n";
+        print "\tSample Name:  $sample_name\n";
+        print "\tCellularity:  $cellularity\n";
+        print "\tGender:       $gender\n";
+        print "\tMAPD:         $mapd\n";
+        print "="x89, "\n";
     }
 }
 
@@ -151,7 +162,6 @@ for my $sample ( keys %cnv_data ) {
     for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$cnv_data{$sample}} ) {
         # Seems to be a bug in the same the CI are reported for deletions.  Solution correctly reports the value
         # in the VCF, but it's not so informative.  This will give a better set of data.
-        #my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(\d+\.\d{4}).*?,0\.95:(\d+\.\d{4}).*/;
         my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/; 
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
         my ($end, $length, $numtiles, $raw_cn, $ref_cn, $cn, $hs, $func) = map { $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
@@ -165,9 +175,12 @@ for my $sample ( keys %cnv_data ) {
             next unless ( $numtiles >= $tiles );
         }
         if ( $geneid ) {
+            my @genelist = split(/,/, $geneid);
             # Allow for case insensitive searching...I'm too lazy for the shift key!
-            $geneid =~ tr/a-z/A-Z/;
-            next unless ( $gene eq $geneid );
+            #$geneid =~ tr/a-z/A-Z/;
+            #next unless ( $gene eq $geneid );
+
+            next unless ( grep { $gene eq uc($_) } @genelist );
         }
 
         # Need to add this to fix null 5% and 95% CI values if they don't exist
