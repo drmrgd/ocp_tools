@@ -11,7 +11,7 @@ import fnmatch
 from time import sleep
 from pprint import pprint
 
-version = '1.2.0_110615'
+version = '1.3.0_010416'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -50,13 +50,13 @@ def get_args():
         print "ERROR: '%s' does not exist!" % rna_bam
         sys.exit(1)
 
-    match=re.search('(PSN)([0-9]{5}$)', psn)
-    if not match: 
+    match=re.search('(PSN)([0-9]+$)', psn)
+    if not match:
         print "ERROR: '%s' is not a valid PSN!" % psn
         sys.exit(1)
 
-    match=re.search('(MSN)([0-9]{4})$', msn)
-    if not match: 
+    match=re.search('(MSN)([0-9]+)$', msn)
+    if not match:
         print "ERROR: '%s' is not a valid MSN!" % msn
         sys.exit(1)
 
