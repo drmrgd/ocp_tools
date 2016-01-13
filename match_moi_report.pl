@@ -26,7 +26,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.0.0_111015";
+my $version = "v3.1.0_011316";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -185,7 +185,7 @@ sub filter_raw_data {
                                INFO.A.FAO POS REF FORMAT.1.CN INFO...CI INFO.1.RO INFO.A.AO FUNC1.coding FUNC1.exon 
                                FUNC1.gene FUNC1.normalizedAlt FUNC1.normalizedRef FUNC1.normalizedPos 
                                FUNC1.oncomineGeneClass FUNC1.oncomineVariantClass FUNC1.protein FUNC1.transcript 
-                               FUNC1.location FUNC1.function INFO.1.ANNOTATION );
+                               FUNC1.location FUNC1.function INFO.1.ANNOTATION INFO.0.HS );
     my %wanted_keys = map { $_ => '' } @wanted_vcf_elems;
     
     @filtered_data{keys %wanted_keys} = @$raw_data{keys %wanted_keys};
@@ -418,6 +418,9 @@ sub proc_ipc {
 sub proc_cnv {
     my $variant_info = shift;
 
+    if ($$variant_info{'INFO.0.HS'}) {
+        return if ($$variant_info{'INFO.0.HS'} eq 'False');
+    }
     if ( $$variant_info{'FORMAT.1.CN'} >= $cn_cutoff ) { 
         my ($ci_05, $ci_95) = $$variant_info{'INFO...CI'} =~ /0\.05:(.*?),0\.95:(.*)/;
         $cnv_data{$$variant_info{'FUNC1.gene'}} = [$$variant_info{'CHROM'}, $$variant_info{'INFO.1.NUMTILES'}, $ci_05, $$variant_info{'FORMAT.1.CN'}, $ci_95];
