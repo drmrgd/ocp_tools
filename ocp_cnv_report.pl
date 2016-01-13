@@ -165,9 +165,23 @@ for my $sample ( keys %cnv_data ) {
         my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/; 
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
         my ($end, $length, $numtiles, $raw_cn, $ref_cn, $cn, $hs, $func) = map { $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
+        $hs //= 'No';
+        #if ($numtiles > 5) {
+            #print '-'x100, "\n";
+            #print "\tend       => $end\n";
+            #print "\tlength    => $length\n";
+            #print "\tnumtiles  => $numtiles\n";
+            #print "\traw cn    => $raw_cn\n";
+            #print "\tref cn    => $ref_cn\n";
+            #print "\tcn        => $cn\n";
+            #print "\ths        => $hs\n";
+            #print "\tfunc      => $func\n";
+            #print '-'x100, "\n";
+        #}
+        #next;
 
         # Filter data
-        next if ( ! $novel && ( $gene eq '.' || ! defined $hs ) );
+        next if ( ! $novel && ($gene eq '.' || $hs eq 'No') );
         if ( $threshold ) {
             next unless ( $cn >= $threshold );
         }
@@ -177,9 +191,6 @@ for my $sample ( keys %cnv_data ) {
         if ( $geneid ) {
             my @genelist = split(/,/, $geneid);
             # Allow for case insensitive searching...I'm too lazy for the shift key!
-            #$geneid =~ tr/a-z/A-Z/;
-            #next unless ( $gene eq $geneid );
-
             next unless ( grep { $gene eq uc($_) } @genelist );
         }
 
