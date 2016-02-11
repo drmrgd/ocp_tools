@@ -487,7 +487,7 @@ sub raw_output {
         print join(',', 'SNV', @{$$snv_indels{$var}}), "\n";
     }
 
-    dd $cnv_data;
+    #dd $cnv_data;
     for my $var (sort{ versioncmp($cnv_data{$a}->[0], $cnv_data{$b}->[0])} keys %$cnv_data) {
         print join(',', 'CNV', $var, @{$$cnv_data{$var}}, $mapd), "\n";
     }
