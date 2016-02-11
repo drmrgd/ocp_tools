@@ -26,7 +26,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.1.0_011316";
+my $version = "v3.2.0_021116";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -37,6 +37,7 @@ USAGE: $scriptname [options] <VCF>
     -f, --freq      Don't report SNVs / Indels below this allele frequency in decimal (0.1=10%). DEFAULT: 0.05 
     -c, --cn        Don't report CNVs below this copy number threshold.  DEFAULT: 7
     -o, --output    Send output to custom file.  Default is STDOUT.
+    -r, --raw       Output raw data rather than pretty printed report that can be parsed with other tools
     -v, --version   Version information
     -h, --help      Print this help information
 EOT
@@ -46,10 +47,12 @@ my $ver_info;
 my $outfile;
 my $freq_cutoff = 0.05;
 my $cn_cutoff = 7;
+my $raw_output;
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cn|c=i"        => \$cn_cutoff,
             "output|o=s"    => \$outfile,
+            "raw|r"         => \$raw_output,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -114,7 +117,7 @@ $expr_control_sum += $ipc_data{$_} for keys %ipc_data;
 $fusion_data{'EXPR_CTRL'} = $expr_control_sum;
 
 # Print out the combined report
-gen_report( \%snv_indel_data, \%fusion_data, \%cnv_data );
+($raw_output) ? raw_output( \%snv_indel_data, \%fusion_data, \%cnv_data ) : gen_report( \%snv_indel_data, \%fusion_data, \%cnv_data );
 
 sub read_vcf {
     # Read in VCF file, proc with 'convert_vcf.py' and load a data struct.
@@ -124,10 +127,12 @@ sub read_vcf {
 
     # Print out a nice title for the report based on the DNA and RNA sample name to make it nicer
     my ($dna_name, $rna_name) = $$input_file =~ /^(?:.*\/)?(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
-    print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
-    print_msg("NCI-MATCH MOI Report for ",'bold ansi15');
-    (! $dna_name || ! $rna_name) ? print_msg("$$input_file\n",'bold ansi15') : print_msg("$dna_name DNA / $rna_name RNA\n",'bold ansi15'); 
-    print_msg(sprintf("%s\n", '-'x150), 'bold ansi15');
+    unless ($raw_output) {
+        print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
+        print_msg("NCI-MATCH MOI Report for ",'bold ansi15');
+        (! $dna_name || ! $rna_name) ? print_msg("$$input_file\n",'bold ansi15') : print_msg("$dna_name DNA / $rna_name RNA\n",'bold ansi15'); 
+        print_msg(sprintf("%s\n", '-'x150), 'bold ansi15');
+    }
 
     # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to read the VCF twice it looks like
     open( my $vcf_fh, "<", $$input_file );
@@ -470,6 +475,30 @@ sub print_msg {
     my ($msg, $format) = @_;
     print {$out_fh} $msg if $outfile;
     ($format) ? print colored($msg, $format) : print $msg;
+    return;
+}
+
+sub raw_output {
+    # Generate a raw data dump so that we can import this data easily into another tool for further parsing.
+    my ($snv_indels, $fusion_data, $cnv_data) = @_;
+
+    #dd $snv_indels;
+    for my $var (sort{ versioncmp( $a, $b ) } keys %$snv_indels) {
+        print join(',', 'SNV', @{$$snv_indels{$var}}), "\n";
+    }
+
+    #dd $cnv_data;
+    for my $var (sort{ versioncmp($cnv_data{$a}->[0], $cnv_data{$b}->[0])} keys %$cnv_data) {
+        print join(',', 'CNV', @{$$cnv_data{$var}}, $mapd), "\n";
+    }
+
+    #dd $fusion_data;  
+    for my $var ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
+        next if $var eq 'EXPR_CTRL';
+        my ($fusion, $junct, $id) = split( /\|/, $var );
+        print join(',', 'Fusion', "$fusion.$junct", $id, $fusion_data{$var}->{'COUNT'}, 
+            $fusion_data{$var}->{'DRIVER'}, $fusion_data{$var}->{'PARTNER'});
+    }
     return;
 }
 
