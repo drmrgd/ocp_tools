@@ -26,7 +26,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.2.1_021116";
+my $version = "v3.2.2_021816";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -497,7 +497,7 @@ sub raw_output {
         next if $var eq 'EXPR_CTRL';
         my ($fusion, $junct, $id) = split( /\|/, $var );
         print join(',', 'Fusion', "$fusion.$junct", $id, $fusion_data{$var}->{'COUNT'}, 
-            $fusion_data{$var}->{'DRIVER'}, $fusion_data{$var}->{'PARTNER'});
+            $fusion_data{$var}->{'DRIVER'}, $fusion_data{$var}->{'PARTNER'}), "\n";
     }
     return;
 }
