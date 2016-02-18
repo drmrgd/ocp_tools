@@ -5,11 +5,11 @@ use strict;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
-use List::Util qw(max);
+use List::Util qw(max sum);
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v1.1.0_080515";
+my $version = "v1.2.0_021816";
 my $description = <<"EOT";
 Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR. Can
 report both the internal expression control data and the 5'3'Assay data.  
@@ -57,8 +57,8 @@ my @expr_controls;
 
 # Need to specify which depending on the panel run.
 ($focus_panel) ? 
-    (@expr_controls = qw( LRP1 TBP MYC HMBS ITGB7 )) : 
-    (@expr_controls = qw( LMNA TBP MYC HMBS ITGB7 ));
+    (@expr_controls = qw( LRP1 TBP MYC HMBS ITGB7 Total)) : 
+    (@expr_controls = qw( LMNA TBP MYC HMBS ITGB7 Total ));
 
 my @fp_controls = qw( NTRK1_5p3p ALK_5p3p ROS1_5p3p RET_5p3p );
 
@@ -76,13 +76,20 @@ for my $input_file ( @files ) {
     (my $name = basename($input_file)) =~ s/\.vcf//;
     open( my $in_fh, "<", $input_file ) || die "Can't open the file '$input_file' for reading: $!";
     my %parsed_data;
+    my $sum = 0;
     while (<$in_fh>) {
         next if /^#/;
         if ( /ExprControl/ ) {
             my @data = split;
             my ($gene, $count) = map { /GENE_NAME=(.*?);READ_COUNT=(\d+);.*/ } @data;
             $parsed_data{expr}->{$gene} = $count;
+            $sum += $count;
+            #print "sum: $sum\n";
         }
+        
+        # Add in the expression control sum data
+        $parsed_data{expr}->{'Total'} = $sum;
+
         # Add in the 5P3P Data
         if ( /5p3pAssays/ ) {
             my @data = split;
