@@ -15,7 +15,7 @@ use Data::Dump;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v1.2.0_122215-dev";
+my $version = "v1.2.1_122215-dev";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -26,7 +26,8 @@ USAGE: $scriptname [options] <VCF_file(s)>
     Filter Options
     -n, --novel       Print non-HS CNVs (Default = OFF)
     -c, --copies      Only print CNVs with at least this copy number 
-    -g, --gene        Print out results for this gene only
+    -g, --gene        Print out results for this gene only. Can also input a list of comma separated gene names to 
+                      output the results for each.
     -t, --tiles       Only print out results for CNVs with at least this many tiles.
     -a, --annot       Only print CNVs with Oncomine Annotations.
 
