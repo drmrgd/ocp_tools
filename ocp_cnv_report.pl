@@ -15,7 +15,7 @@ use Data::Dump;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v1.2.1_122215-dev";
+my $version = "v2.0.0_022916";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -143,9 +143,6 @@ for my $input_file (@vcfs) {
     }
 }
 
-#dd \%cnv_data;
-#exit;
-
 # Set up for printing output
 my @outfields = qw( END LEN NUMTILES RAW_CN REF_CN CN HS FUNC );
 my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN Annot );
@@ -167,19 +164,6 @@ for my $sample ( keys %cnv_data ) {
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
         my ($end, $length, $numtiles, $raw_cn, $ref_cn, $cn, $hs, $func) = map { $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
         $hs //= 'No';
-        #if ($numtiles > 5) {
-            #print '-'x100, "\n";
-            #print "\tend       => $end\n";
-            #print "\tlength    => $length\n";
-            #print "\tnumtiles  => $numtiles\n";
-            #print "\traw cn    => $raw_cn\n";
-            #print "\tref cn    => $ref_cn\n";
-            #print "\tcn        => $cn\n";
-            #print "\ths        => $hs\n";
-            #print "\tfunc      => $func\n";
-            #print '-'x100, "\n";
-        #}
-        #next;
 
         # Filter data
         next if ( ! $novel && ($gene eq '.' || $hs eq 'No') );
