@@ -19,14 +19,15 @@ use Term::ANSIColor;
 use Data::Dump;
 
 # Remove when in prod.
-#print "\n";
-#print colored("*" x 50, 'bold yellow on_black'), "\n";
-#print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
-#print colored("*" x 50, 'bold yellow on_black');
-#print "\n\n";
+print "\n";
+print colored("*" x 50, 'bold yellow on_black'), "\n";
+print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
+print colored("      WARN:  CNV Threshold set to 5% CI >= 4; METe14 threshold set to >1000\n", 'bold yellow on_black');
+print colored("*" x 50, 'bold yellow on_black');
+print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.2.2_021816";
+my $version = "v3.3.0_022916";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -35,7 +36,7 @@ EOT
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
     -f, --freq      Don't report SNVs / Indels below this allele frequency in decimal (0.1=10%). DEFAULT: 0.05 
-    -c, --cn        Don't report CNVs below this copy number threshold.  DEFAULT: 7
+    -c, --cn        Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
     -o, --output    Send output to custom file.  Default is STDOUT.
     -r, --raw       Output raw data rather than pretty printed report that can be parsed with other tools
     -v, --version   Version information
@@ -46,7 +47,8 @@ my $help;
 my $ver_info;
 my $outfile;
 my $freq_cutoff = 0.05;
-my $cn_cutoff = 7;
+#my $cn_cutoff = 7;
+my $cn_cutoff = 4;
 my $raw_output;
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
@@ -219,6 +221,7 @@ sub proc_snv_indel {
         chr7:116340262:A:G
         chr7:116411990:C:T
         chr9:98209628:T:TG
+        chr9:139391438:TG:T
         chr9:139391975:GC:G
         chr9:139399132:C:T
         chr10:89685288:T:TA
@@ -233,6 +236,7 @@ sub proc_snv_indel {
         chr13:32972626:A:T
         chr16:68855966:G:A
         chr17:7578212:GA:G
+        chr17:7578373:T:C
         chr17:7579471:G:GC
         chr17:7579472:G:C
         chr17:29508455:TTA:T
@@ -370,20 +374,8 @@ sub proc_fusion {
         # Don't use FUNC1.gene; not reliable.
         my ($gene1, $gene2) = split(/-/,$pair);
 
-        #print "$$variant_info{'ID'}  => \n";
-        #print "\tname:  $name\n";
-        #print "\tgene:  $$variant_info{'FUNC1.gene'}\n";
-        #print "\tgene1: $gene1\n";
-        #print "\tgene2: $gene2\n";
-        #print "\tpair:  $pair\n";
-        #print "\tjunct: $junct\n";
-        #print "\tID:    $$variant_info{'INFO.1.ANNOTATION'}\n";
-        #print "\toID:   $id\n";
-        #print '-'x50;
-        #print "\n";
-
         # Get rid of Fusions that are below our thresholds
-        if ( $id eq 'DelPositive' ) {
+        if ( $id eq 'DelPositive' || $pair eq 'MET-MET' ) {
             return if $$variant_info{'INFO...READ_COUNT'} < 1000;
         } else {
             return if $$variant_info{'INFO...READ_COUNT'} < 25;
@@ -426,10 +418,9 @@ sub proc_cnv {
     if ($$variant_info{'INFO.0.HS'}) {
         return if ($$variant_info{'INFO.0.HS'} eq 'False');
     }
-    if ( $$variant_info{'FORMAT.1.CN'} >= $cn_cutoff ) { 
-        my ($ci_05, $ci_95) = $$variant_info{'INFO...CI'} =~ /0\.05:(.*?),0\.95:(.*)/;
-        $cnv_data{$$variant_info{'FUNC1.gene'}} = [$$variant_info{'CHROM'}, $$variant_info{'INFO.1.NUMTILES'}, $ci_05, $$variant_info{'FORMAT.1.CN'}, $ci_95];
-    }
+    my ($ci_05, $ci_95) = $$variant_info{'INFO...CI'} =~ /0\.05:(.*?),0\.95:(.*)/;
+    return unless $ci_05 >= $cn_cutoff;
+    $cnv_data{$$variant_info{'FUNC1.gene'}} = [$$variant_info{'CHROM'}, $$variant_info{'INFO.1.NUMTILES'}, $ci_05, $$variant_info{'FORMAT.1.CN'}, $ci_95];
     return;
 }
 
@@ -537,7 +528,7 @@ sub gen_report {
 
     print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
     print_msg(@formatted_mapd);
-    print_msg( ", CN >= $cn_cutoff) :::\n", "ansi3");
+    print_msg( ", 5% CI>= $cn_cutoff) :::\n", "ansi3");
 
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
