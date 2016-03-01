@@ -120,7 +120,7 @@ for my $input_file ( @files ) {
 
 # Get the longest sample name width
 my ($width) = max( map { length($_)+4 } keys %results );
-my $top_pad = ($width+54);
+my $top_pad = ($width+62);
 
 # Create header
 select $out_fh;
