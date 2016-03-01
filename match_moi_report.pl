@@ -6,9 +6,6 @@
 use warnings;
 use strict;
 use autodie;
-use feature "switch";
-# Need to turn of smartmatch warning, but only if the version of perl is newer
-no if $] > 5.018, 'warnings', 'experimental::smartmatch'; 
 
 use constant DEBUG => 0;
 
@@ -22,32 +19,31 @@ use Data::Dump;
 print "\n";
 print colored("*" x 50, 'bold yellow on_black'), "\n";
 print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
-print colored("      WARN:  CNV Threshold set to 5% CI >= 4; METe14 threshold set to >1000\n", 'bold yellow on_black');
+print colored("      WARN:  \n\tCNV Threshold set to 5% CI >= 4;\n\tMETe14 threshold set to >1000\n", 'bold yellow on_black');
 print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.3.0_022916";
+my $version = "v3.9.0_030116";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
-the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
+the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
 EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
-    -f, --freq      Don't report SNVs / Indels below this allele frequency in decimal (0.1=10%). DEFAULT: 0.05 
-    -c, --cn        Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
-    -o, --output    Send output to custom file.  Default is STDOUT.
-    -r, --raw       Output raw data rather than pretty printed report that can be parsed with other tools
-    -v, --version   Version information
-    -h, --help      Print this help information
+    -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: 5%)
+    -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
+    -o, --output STR   Send output to custom file.  Default is STDOUT.
+    -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
+    -v, --version      Version information
+    -h, --help         Print this help information
 EOT
 
 my $help;
 my $ver_info;
 my $outfile;
-my $freq_cutoff = 0.05;
-#my $cn_cutoff = 7;
+my $freq_cutoff = 5;
 my $cn_cutoff = 4;
 my $raw_output;
 
@@ -82,7 +78,7 @@ if ( scalar( @ARGV ) < 1 ) {
 # Write output to either indicated file or STDOUT
 my $out_fh;
 if ( $outfile ) {
-    #print "Writing results to $outfile...\n";
+    print "Writing results to $outfile...\n";
     open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
 }
 
@@ -96,115 +92,27 @@ if (DEBUG) {
     print "=====================================================================================\n\n";
 }
 
+# Check ENV for required programs
+my @required_programs = qw( vcfExtractor.pl ocp_cnv_report.pl ocp_control_summary.pl ocp_fusion_report.pl );
+for my $prog (@required_programs) {
+    die "ERROR: '$prog' is required, but not found in your path!\n" unless `which $prog`;
+}
+
 ########------------------------------ END ARG Parsing ---------------------------------#########
 my $vcf_file = shift;
-my ($gender, $cellularity, $mapd, $tot_rna_reads);
-my $variant_data = read_vcf(\$vcf_file );
 
-# Parse TSV file based on variant type and load up a hash of results.
-my (%snv_indel_data, %fusion_data, %cnv_data, %ipc_data);
-for my $variant (@$variant_data) {
-    my $type = $$variant{'rowtype'};
-    given ($type) {
-        when (/([ms]np|ins|del|complex)/) { proc_snv_indel( $variant ) }
-        when (/Fusion/)                   { proc_fusion( $variant ) }
-        when (/CNV/)                      { proc_cnv( $variant ) }
-        when (/ExprControl/)              { proc_ipc( $variant) }
-        default                           {next}
-    }
-}
-
-my $expr_control_sum = 0;
-$expr_control_sum += $ipc_data{$_} for keys %ipc_data;
-$fusion_data{'EXPR_CTRL'} = $expr_control_sum;
+my $snv_indel_data          = proc_snv_indel(\$vcf_file);
+my $cnv_data                = proc_cnv(\$vcf_file);
+my $fusion_data             = proc_fusion(\$vcf_file);
+$$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file);
 
 # Print out the combined report
-($raw_output) ? raw_output( \%snv_indel_data, \%fusion_data, \%cnv_data ) : gen_report( \%snv_indel_data, \%fusion_data, \%cnv_data );
-
-sub read_vcf {
-    # Read in VCF file, proc with 'convert_vcf.py' and load a data struct.
-    my $input_file = shift;
-    (my $converted_vcf = $$input_file) =~ s/vcf$/tsv/;
-    my @variant_results;
-
-    # Print out a nice title for the report based on the DNA and RNA sample name to make it nicer
-    my ($dna_name, $rna_name) = $$input_file =~ /^(?:.*\/)?(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
-    unless ($raw_output) {
-        print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
-        print_msg("NCI-MATCH MOI Report for ",'bold ansi15');
-        (! $dna_name || ! $rna_name) ? print_msg("$$input_file\n",'bold ansi15') : print_msg("$dna_name DNA / $rna_name RNA\n",'bold ansi15'); 
-        print_msg(sprintf("%s\n", '-'x150), 'bold ansi15');
-    }
-
-    # Want to have MAPD, Gender, and Cellularity in the output.  So, going to have to read the VCF twice it looks like
-    open( my $vcf_fh, "<", $$input_file );
-    while (<$vcf_fh>) {
-        if ( /^##/ ) {
-            if ( /sampleGender=(\w+)/ ) {
-                $gender = $1; 
-                next;
-            } 
-            elsif ( /CellularityAsAFractionBetween0-1=(.*)$/ ) {
-                $cellularity = sprintf( "%d%%", 100 * $1); 
-                next;
-            }
-            elsif ( /mapd=(\d\.\d+)/ ) {
-                $mapd = $1; 
-                next;
-            }
-            elsif ( /TotalMappedFusionPanelReads=(\d+)/ ) {
-                $tot_rna_reads = $1;
-                next;
-            }
-        }
-    }
-    close $vcf_fh;
-
-    #print "Coverting VCF file into TSV file for parsing...\n";
-    qx( convert_vcf.py --force -i $$input_file -o $converted_vcf );
-
-    open( my $fh, "<", $converted_vcf );
-    chomp(my $header = <$fh>);
-    # for some reason v1.3.1 of vcf_coverter is outputting quotes; remove them!
-    my @header_elems = map { s/"//g; $_ } split(/\t/, $header);
-    while (<$fh>) {
-        $_ =~ s/"//g; 
-        my %raw_data;
-        chomp( my @elems = split(/\t/) );
-        @raw_data{@header_elems} = @elems;
-        my %filtered = filter_raw_data( \%raw_data );
-        push(@variant_results, \%filtered);
-    }
-    close $fh;
-
-    unlink $converted_vcf;
-    return \@variant_results;
-}
-
-sub filter_raw_data {
-    # Pass in the raw data from the 'read_vcf()' sub and cull out what we don't need.
-    my $raw_data = shift;
-    my %filtered_data;
-
-    # Use hash instead of array of keys in order to prevent undef key warning
-    my @wanted_vcf_elems = qw( rowtype call ALT CHROM FILTER ID INFO...FR INFO...OALT INFO...OID INFO...OMAPALT 
-                               INFO...OPOS INFO...OREF INFO...READ_COUNT INFO.1.FRO INFO.1.NUMTILES INFO.A.AF 
-                               INFO.A.FAO POS REF FORMAT.1.CN INFO...CI INFO.1.RO INFO.A.AO FUNC1.coding FUNC1.exon 
-                               FUNC1.gene FUNC1.normalizedAlt FUNC1.normalizedRef FUNC1.normalizedPos 
-                               FUNC1.oncomineGeneClass FUNC1.oncomineVariantClass FUNC1.protein FUNC1.transcript 
-                               FUNC1.location FUNC1.function INFO.1.ANNOTATION INFO.0.HS );
-    my %wanted_keys = map { $_ => '' } @wanted_vcf_elems;
-    
-    @filtered_data{keys %wanted_keys} = @$raw_data{keys %wanted_keys};
-    return %filtered_data;
-}
+($raw_output) ? raw_output( $snv_indel_data, $fusion_data, $cnv_data ) : gen_report( $vcf_file, $snv_indel_data, $fusion_data, $cnv_data );
 
 sub proc_snv_indel {
-    # Follow rules to generate a list of MOIs and aMOIs
-    my $variant_info = shift;
-    my @oncomine_vc = qw( Deleterious Hotspot );
-    my @undesired_locations = qw( unknown intergenic intronic utr_5 utr_3 splicesite_5 splicesite_3 upstream
-                                  downstream intronic_nc ncRNA nonCoding);
+    # use new VCF extractor to handle SNV and Indel calling
+    my $vcf = shift;
+    my %results;
 
     # Blacklisted variants based on Oncomine's list of recurrent SNPs and high error rate mutations.
     my @blacklisted_variants = qw(
@@ -244,184 +152,126 @@ sub proc_snv_indel {
         chr19:1223125:C:G
         chr20:36030940:G:C
     );
+    my @oncomine_vc = qw( Deleterious Hotspot );
 
-    # Map these variables to make typing easier and the code cleaner downstream
-    my $info_af  = $$variant_info{'INFO.A.AF'};
-    my $ro       = $$variant_info{'INFO.1.RO'};
-    my $ao       = $$variant_info{'INFO.A.AO'};
-    my $function = $$variant_info{'FUNC1.function'};
-    my $location = $$variant_info{'FUNC1.location'};
-    my $exon     = $$variant_info{'FUNC1.exon'};
-    my $gene     = $$variant_info{'FUNC1.gene'};
-    my $ocp_vc   = $$variant_info{'FUNC1.oncomineVariantClass'};
+    open(my $vcf_data, "-|", "vcfExtractor.pl -Nna $$vcf") or die "ERROR: can't parse VCF";
+    while (<$vcf_data>) {
+        next unless /^chr/;
+        my @fields = split;
+        my $id = join(':', @fields[0..2]);
+        next if grep {$id eq $_} @blacklisted_variants;
 
-    return if ( grep { $location eq $_ } @undesired_locations );
-    return if $function eq 'synonymous';
-
-    my $id = join( ':', $$variant_info{'CHROM'}, $$variant_info{'INFO...OPOS'}, $$variant_info{'INFO...OREF'}, $$variant_info{'INFO...OALT'} );
-    
-    # Added to prevent missing long indel assembler calls.
-    my $vaf;
-    if ( $info_af !~ /\d+/ ) { 
-        $vaf = $ao / ($ro + $ao);
-    } else {
-        $vaf = $info_af;
-    }
-
-    # Substitute for the computed one to be used for the rest of the script
-    $$variant_info{'VAF'} = $vaf;
-
-    # Remove Blacklisted SNPs
-    return if grep { $id eq $_ } @blacklisted_variants;
-
-    # Get some debugging messages if there's an issue
-    local $SIG{__WARN__} = sub {
-        print "**** Error in parsing line ****\n\n";
-        my $message = shift;
-        print $message;
-        print "variant id  => $id\n";
-        print "vaf         => $vaf\n";
-        dd $variant_info;
-        print "*******************************\n";
-        exit;
-    };
-
-    # Need to define the hash entry or we'll get an issue later on.
-    $ocp_vc //= '---';
-
-    if ( $vaf >= $freq_cutoff ) {
-        # Anything that's a hotspot
-        if ( $$variant_info{'INFO...OID'} ne '.' ) {
-            # bin NOCALLs for now
-            return if ( $$variant_info{'call'} eq 'NOCALL' );
-            gen_var_entry( $variant_info, \$id, 'Hotspot Variant' );
-        }
-        # De Novo TSG frameshift calls
-        elsif ( grep {$ocp_vc eq $_} @oncomine_vc ) {
-            gen_var_entry( $variant_info, \$id, 'Deleterious in TSG' );
-        }
-        # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
-        elsif ( $gene eq 'EGFR' ) { 
-            if ( $exon == 19 && $function eq 'nonframeshiftDeletion' ) {
-                gen_var_entry( $variant_info, \$id, 'nonframeshiftDeletion in Exon 20' );
+        # Map these variables to make typing easier and the code cleaner downstream
+        my $vaf        = $fields[3];
+        my $gene       = $fields[8];
+        my $ocp_vc     = $fields[15];
+        my $hotspot_id = $fields[7];
+        my $function   = $fields[13];
+        (my $exon = $fields[12]) =~ s/Exon//;
+        next if $exon eq 'intronic';
+        
+        if ( $vaf >= $freq_cutoff ) {
+            # Anything that's a hotspot
+            if ( $hotspot_id ne '.' ) {
+                $results{$id} = gen_var_entry(\@fields, 'Hotspot Variant');
             }
-            elsif ($exon == 20 && $function eq 'nonframeshiftInsertion') {
-                gen_var_entry( $variant_info, \$id, 'nonframeshiftInsertion in Exon 19' );
+            # De Novo TSG frameshift calls
+            elsif ( grep {$ocp_vc eq $_} @oncomine_vc ) {
+                $results{$id} = gen_var_entry(\@fields, 'Deleterious in TSG');
+            }
+            # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
+            elsif ( $gene eq 'EGFR' ) { 
+                if ( $exon == 19 && $function eq 'nonframeshiftDeletion' ) {
+                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftDeletion in Exon 20');
+                }
+                elsif ($exon == 20 && $function eq 'nonframeshiftInsertion') {
+                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 19');
+                }
+            }
+            # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
+            elsif ( $gene eq 'ERBB2' && $exon eq '20' && $function eq 'nonframeshiftInsertion' ) {
+                $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 20');
+            }
+            # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
+            elsif ( $gene eq 'KIT' && (grep $exon == $_, (9,11)) && $function =~ /nonframeshift.*/ ) {
+                $results{$id} = gen_var_entry(\@fields, 'nonframeshiftIndel in Exon 9 or 11 of KIT');
             }
         }
-        # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
-        elsif ( $gene eq 'ERBB2' && $exon eq '20' && $function eq 'nonframeshiftInsertion' ) {
-            gen_var_entry( $variant_info, \$id, 'nonframeshiftInsertion in Exon 20' );
-        }
-
-        # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
-        elsif ( $gene eq 'KIT' && (grep $exon == $_, (9,11)) && $function =~ /nonframeshift.*/ ) {
-            gen_var_entry( $variant_info, \$id, 'nonframeshiftIndel in Exon 9 or 11' );
-        }
     }
-    return;
+    #dd \%results;
+    #exit;
+    return \%results;
 }
-
 sub gen_var_entry {
-    my $data = shift;
-    my $id = shift;
-    my $rule = shift;
-
-    my $coord = "$$data{'CHROM'}:$$data{'INFO...OPOS'}";
-    my $ref = $$data{'INFO...OREF'};
-    my $alt = $$data{'INFO...OALT'};
-    my $filter = $$data{'FILTER'};
-    (my $fr = $$data{'INFO...FR'}) =~ s/^\.,//;
-    my $vaf = sprintf( "%0.2f", ($$data{'VAF'} * 100) );
-
-    my ($rcov, $acov, $tcov);
-    #if ( ! $$data{'INFO.A.FAO'} || ! $$data{'INFO.1.FRO'} ) {
-    if ( ! $$data{'INFO.A.FAO'} || $$data{'INFO.A.FAO'} eq '.' || ! $$data{'INFO.1.FRO'} ) {
-        $rcov = $$data{'INFO.1.RO'};
-        $acov = $$data{'INFO.A.AO'}; 
-    } else {
-        $rcov = $$data{'INFO.1.FRO'};
-        $acov = $$data{'INFO.A.FAO'}; 
-    }
-    $tcov = $rcov + $acov;
-    my $varid    = $$data{'ID'};
-    my $gene     = $$data{'FUNC1.gene'};
-    my $function = $$data{'FUNC1.function'};
-    my $location = $$data{'FUNC1.location'};
-    my $exon     = $$data{'FUNC1.exon'};
-    my $hgvs     = $$data{'FUNC1.coding'};
-    my $tscript  = $$data{'FUNC1.transcript'};
-    my $protein  = $$data{'FUNC1.protein'};
-
-    my ($om_gc, $om_vc);
-    ($$data{'FUNC1.oncomineGeneClass'}) ? ($om_gc = $$data{'FUNC1.oncomineGeneClass'}) : ($om_gc = '---');
-    ($$data{'FUNC1.oncomineVariantClass'}) ? ($om_vc = $$data{'FUNC1.oncomineVariantClass'}) : ($om_vc = '---');
-    $snv_indel_data{$$id} = [$coord, $ref, $alt, $vaf, $tcov, $rcov, $acov, $varid, $gene, $tscript, $hgvs, $protein, $om_gc, $om_vc, $rule];
-    return;
+    my ($data, $rule) = @_;
+    return [@$data[0..11,13,14,15],$rule];
 }
 
 sub proc_fusion {
-    # Generate Hash of fusion data for output later.
-    my $variant_info = shift;
-    my @drivers = qw( ABL1 AKT3 ALK AXL BRAF CDK4 EGFR ERBB2 ERG ETV1 ETV1a ETV1b ETV4 ETV4a ETV5 ETV5a ETV5b ETV5d 
-                      FGFR1 FGFR2 FGFR3 MET NTRK1 NTRK2 NTRK3 PDGFRA PPARG RAF1 RET ROS1);
+    # Generate Hash of fusion data using ocp_fusion_report.pl
+    my $vcf_file = shift;
+    my %results;
 
-    if ( $$variant_info{'call'} eq 'POS' ) { 
-        my ($name, $elem) = $$variant_info{'ID'} =~ /(.*)_([12])$/;
-        my ($pair, $junct, $id) = split( /\./, $name );
-        $id //= '-';
-
-        # Don't use FUNC1.gene; not reliable.
-        my ($gene1, $gene2) = split(/-/,$pair);
+    open(my $vcf_data, '-|', "ocp_fusion_report.pl $$vcf_file") or die "ERROR: Can't parse VCF file for fusions!";
+    while (<$vcf_data>) {
+        # Skip header and blank lines
+        next if $. < 4 || $_ =~ /^\s*$/;
+        my @fields = split;
 
         # Get rid of Fusions that are below our thresholds
-        if ( $id eq 'DelPositive' || $pair eq 'MET-MET' ) {
-            return if $$variant_info{'INFO...READ_COUNT'} < 1000;
+        if ( $fields[1] eq 'DelPositive' || $fields[0] eq 'MET-MET.M13M15' ) {
+            next if $fields[2] < 1000;
         } else {
-            return if $$variant_info{'INFO...READ_COUNT'} < 25;
+            next if $fields[2] < 25;
         }
 
-        my $fid = join( '|', $pair, $junct, $id );
-        
-        # No direct mapping of driver / partner for fusions, and sometimes we get cases of two drivers (ie
-        # not noted kinase drivers) indicated in the fusion.  So, have to parse a little more robustly.
-        if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
-            $fusion_data{$fid}->{'DRIVER'} = $fusion_data{$fid}->{'PARTNER'} = $$variant_info{'FUNC1.gene'};
-        }
-        elsif ( grep{ $_ eq $gene1 } @drivers ) {
-            $fusion_data{$fid}->{'DRIVER'} = $gene1;
-            $fusion_data{$fid}->{'PARTNER'} = $gene2;
-        } 
-        elsif (grep{ $_ eq $gene2} @drivers) {
-            $fusion_data{$fid}->{'PARTNER'} = $gene1;
-            $fusion_data{$fid}->{'DRIVER'} = $gene2;
-        }
-        else {
-            $fusion_data{$fid}->{'DRIVER'}  = 'UNKNOWN';
-            $fusion_data{$fid}->{'PARTNER'} = "$gene1,$gene2";
-        }
-        $fusion_data{$fid}->{'COUNT'} = $$variant_info{'INFO...READ_COUNT'};
+        #my $fid = join( '|', $pair, $junct, $id );
+        $fields[0] =~ s/\./|/;
+        $results{"$fields[0]|$fields[1]"} = {
+            'DRIVER'   => $fields[3],
+            'PARTNER'  => $fields[4],
+            'COUNT'    => $fields[2]
+        };
     }
-    return;
+    # Get the total mapped RNA reads
+    open(my $fh, "<", $$vcf_file);
+    my ($mapped_reads) = map { /^##TotalMappedFusionPanelReads=(\d+)/ }<$fh>;
+    close $fh;
+    $results{'MAPPED_RNA'} = $mapped_reads;
+
+    return \%results;
 }
 
 sub proc_ipc {
-    # Get the RNA panel expression control data for output.
-    my $variant_info = shift;
-    $ipc_data{$$variant_info{'FUNC1.gene'}} = $$variant_info{'INFO...READ_COUNT'};
-    return;
+    # Get the RNA panel expression control sum 
+    my $vcf_file = shift;
+
+    open( my $vcf_data, '-|', "ocp_control_summary.pl -f $$vcf_file" ) || die "ERROR: Can't parse the IPC data";
+    my ($expr_sum) = map {/\s+(\d+)\s*$/} <$vcf_data>; # trailing whitespace in ocp_control_summary output.
+    $expr_sum //= 0;
+    return $expr_sum;
 }
 
 sub proc_cnv {
-    my $variant_info = shift;
+    my $vcf_file = shift;
+    my %results;
+    my ($gender, $cellularity, $mapd);
 
-    if ($$variant_info{'INFO.0.HS'}) {
-        return if ($$variant_info{'INFO.0.HS'} eq 'False');
+    open(my $vcf_data, '-|', "ocp_cnv_report.pl $$vcf_file");
+    while (<$vcf_data>) {
+        if (/^:::/) {
+            ($gender, $cellularity, $mapd) = $_ =~ /.*?Gender: (\w+), Cellularity: (.*?), MAPD: (\d\.\d+)\) :::$/;
+        }
+        elsif (/^chr/) {
+            my @fields = split;
+            my $ci_05 = $fields[8];
+            my $cn = $fields[10];
+            next unless $ci_05 >= $cn_cutoff;
+            $results{$fields[1]} = [@fields[0,5,8,10,9]];
+        }
     }
-    my ($ci_05, $ci_95) = $$variant_info{'INFO...CI'} =~ /0\.05:(.*?),0\.95:(.*)/;
-    return unless $ci_05 >= $cn_cutoff;
-    $cnv_data{$$variant_info{'FUNC1.gene'}} = [$$variant_info{'CHROM'}, $$variant_info{'INFO.1.NUMTILES'}, $ci_05, $$variant_info{'FORMAT.1.CN'}, $ci_95];
-    return;
+    $results{'META'} = [$gender, $cellularity, $mapd];
+    return \%results;
 }
 
 sub field_width {
@@ -472,41 +322,48 @@ sub print_msg {
 sub raw_output {
     # Generate a raw data dump so that we can import this data easily into another tool for further parsing.
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
+    my $mapd = $$cnv_data{'META'}[2];
 
-    #dd $snv_indels;
     for my $var (sort{ versioncmp( $a, $b ) } keys %$snv_indels) {
         print join(',', 'SNV', @{$$snv_indels{$var}}), "\n";
     }
 
-    #dd $cnv_data;
-    for my $var (sort{ versioncmp($cnv_data{$a}->[0], $cnv_data{$b}->[0])} keys %$cnv_data) {
+    for my $var (sort{ versioncmp($$cnv_data{$a}->[0], $$cnv_data{$b}->[0])} keys %$cnv_data) {
+        next if $var eq 'META';
         print join(',', 'CNV', $var, @{$$cnv_data{$var}}, $mapd), "\n";
     }
 
-    #dd $fusion_data;  
     for my $var ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
-        next if $var eq 'EXPR_CTRL';
+        next if $var eq 'EXPR_CTRL' || $var eq 'MAPPED_RNA';
         my ($fusion, $junct, $id) = split( /\|/, $var );
-        print join(',', 'Fusion', "$fusion.$junct", $id, $fusion_data{$var}->{'COUNT'}, 
-            $fusion_data{$var}->{'DRIVER'}, $fusion_data{$var}->{'PARTNER'}), "\n";
+        print join(',', 'Fusion', "$fusion.$junct", $id, $$fusion_data{$var}->{'COUNT'}, 
+            $$fusion_data{$var}->{'DRIVER'}, $$fusion_data{$var}->{'PARTNER'}), "\n";
     }
     return;
 }
 
 sub gen_report {
     # Print out the final MOI Report
-    my ($snv_indels, $fusion_data, $cnv_data) = @_;
+    my ($vcf_filename, $snv_indels, $fusion_data, $cnv_data) = @_;
     my ($w1, $w2, $w3, $w4);
 
+    #########################
+    ##    Report Header    ##
+    #########################
+    my ($dna_name, $rna_name) = $vcf_filename =~ /^(?:.*\/)?(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
+    print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
+    print_msg('NCI-MATCH MOI Report for ', 'bold ansi15');
+    (! $dna_name || ! $rna_name) ? print_msg("$vcf_filename\n", 'bold ansi15') : print_msg("$dna_name DNA / $rna_name RNA\n", 'bold ansi15');
+    print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
 
     #########################
     ## SNV / Indel Output  ##
     #########################
     print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n",'ansi3');
     ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
-    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript HGVS Protein oncomineGeneClass 
+    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript HGVS Protein Function oncomineGeneClass 
                                oncomineVariantClass Functional_Rule );
-    my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-16s %-${w4}s %-16s %-21s %-22s %-21s\n";
+    my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-16s %-${w4}s %-16s %-23s %-21s %-22s %-21s\n";
 
     print_msg(sprintf($snv_indel_format, @snv_indel_header));
     if ( %$snv_indels ) {
@@ -522,7 +379,10 @@ sub gen_report {
     ##  CNV Result Ouput  ##
     ########################
     my @formatted_mapd;
-    ($mapd >= 0.9) ? 
+    my ($gender, $cellularity, $mapd) = @{$$cnv_data{'META'}};
+    delete $$cnv_data{'META'};
+    
+    ($mapd >= 0.9 || $mapd == 0) ? 
         (@formatted_mapd = ("**$mapd**", 'bold red on_black')) : 
         (@formatted_mapd = ($mapd,'ansi3'));
 
@@ -534,8 +394,8 @@ sub gen_report {
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
     print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
     if ( %$cnv_data ) {
-        for my $cnv ( sort{ versioncmp( $cnv_data{$a}->[0], $cnv_data{$b}->[0] ) } keys %$cnv_data ) {
-            print_msg(sprintf($cnv_format, $cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
+        for my $cnv ( sort{ versioncmp( $$cnv_data{$a}->[0], $$cnv_data{$b}->[0] ) } keys %$cnv_data ) {
+            print_msg(sprintf($cnv_format, $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
         }
     } else {
         print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
@@ -545,13 +405,15 @@ sub gen_report {
     #########################
     ##   Fusions Output    ##
     #########################
+    my $ipc_reads = $$fusion_data{'EXPR_CTRL'};  
+    delete $$fusion_data{'EXPR_CTRL'};
+    my $tot_rna_reads = $$fusion_data{'MAPPED_RNA'};
+    delete $$fusion_data{'MAPPED_RNA'};
+
     my @read_count;
     ($tot_rna_reads < 100000) ? 
         (@read_count = ("**$tot_rna_reads**", 'bold red on_black')) : 
         (@read_count = ($tot_rna_reads,'ansi3')); 
-
-    my $ipc_reads = $$fusion_data{'EXPR_CTRL'};
-    delete $$fusion_data{'EXPR_CTRL'};
 
     my @ipc_output;
     ($ipc_reads < 20000) ? 
@@ -571,7 +433,7 @@ sub gen_report {
     if ( %$fusion_data ) {
         for ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
             my ($fusion, $junct, $id) = split( /\|/ );
-            print_msg(sprintf($fusion_format, "$fusion.$junct", $id, $fusion_data{$_}->{'COUNT'}, $fusion_data{$_}->{'DRIVER'}, $fusion_data{$_}->{'PARTNER'}));
+            print_msg(sprintf($fusion_format, "$fusion.$junct", $id, $$fusion_data{$_}->{'COUNT'}, $$fusion_data{$_}->{'DRIVER'}, $$fusion_data{$_}->{'PARTNER'}));
         }
     } else {
         print_msg(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
