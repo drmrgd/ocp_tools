@@ -24,7 +24,7 @@ print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.8.3_030116";
+my $version = "v3.8.4_030116";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -251,6 +251,8 @@ sub proc_ipc {
 
     open( my $vcf_data, '-|', "ocp_control_summary.pl -f $$vcf_file" ) || die "ERROR: Can't parse the IPC data";
     my ($expr_sum) = map {/\s+(\d+)\s*$/} <$vcf_data>; # trailing whitespace in ocp_control_summary output.
+    $expr_sum //= 0;
+    #print "sum: $expr_sum\n";
     return $expr_sum;
 }
 
