@@ -24,7 +24,7 @@ print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.9.0_030116";
+my $version = "v3.9.1_030116";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -70,7 +70,7 @@ version if $ver_info;
 
 # Make sure enough args passed to script
 if ( scalar( @ARGV ) < 1 ) {
-    print "ERROR: No VCF file passed to script\n\n!";
+    print "ERROR: No VCF file passed to script!\n\n";
     print "$usage\n";
     exit 1;
 }
