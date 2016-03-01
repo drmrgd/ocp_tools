@@ -24,7 +24,7 @@ print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.8.0_030116";
+my $version = "v3.8.2_030116";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the use of `convert_vcf.py` from ThermoFisher to run as it does the bulk of the file parsing.
@@ -32,18 +32,18 @@ EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
-    -f, --freq      Don't report SNVs / Indels below this allele frequency in decimal (0.1=10%). DEFAULT: 0.05 
-    -c, --cn        Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
-    -o, --output    Send output to custom file.  Default is STDOUT.
-    -r, --raw       Output raw data rather than pretty printed report that can be parsed with other tools
-    -v, --version   Version information
-    -h, --help      Print this help information
+    -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: 5%)
+    -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
+    -o, --output STR   Send output to custom file.  Default is STDOUT.
+    -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
+    -v, --version      Version information
+    -h, --help         Print this help information
 EOT
 
 my $help;
 my $ver_info;
 my $outfile;
-my $freq_cutoff = 0.05;
+my $freq_cutoff = 5;
 my $cn_cutoff = 4;
 my $raw_output;
 
@@ -395,7 +395,7 @@ sub gen_report {
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
     print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
-    if ( $cnv_data ) {
+    if ( %$cnv_data ) {
         for my $cnv ( sort{ versioncmp( $$cnv_data{$a}->[0], $$cnv_data{$b}->[0] ) } keys %$cnv_data ) {
             print_msg(sprintf($cnv_format, $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
         }
