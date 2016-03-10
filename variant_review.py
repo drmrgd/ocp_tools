@@ -70,12 +70,11 @@ def get_args():
 def gen_wd(psn,msn):
     new_dir = psn +'_'+ msn +'_variant_reports'
 
-    # TODO:  What if we want to just add data to what's there.  Make a 3 opt selection, Replace, Rename, Abort?
     if os.path.isdir(new_dir):
         print "WARN: Directory '%s' already exists!" % new_dir,
         choice = user_query(' Overwrite current data?')
         if not choice:
-            print "Exiting so we don't overwrite old data!"
+            print "Exiting so we don't overwrite old data! You should move old data to a new directory and try again."
             sys.exit(1)
         else:
             print "Revoming old directory to make room for new data."
@@ -85,7 +84,6 @@ def gen_wd(psn,msn):
     os.mkdir(new_dir)
 
     return new_dir
-
 
 def user_query(query, default='no'):
     '''User query code from SO #3041986 user fmark.  Very nice idea!'''
@@ -170,7 +168,6 @@ def gen_moi_report(msn,vcf):
     filename = msn + '_MATCH_MOI_Report.txt'
 
     print "Generating a MATCH MOI Report for {}...".format(msn),
-    #p=subprocess.Popen(['match_moi_report.pl', vcf], stdout=subprocess.PIPE)
     p=subprocess.Popen(['match_moi_report.pl', '-o', filename, vcf], stdout=subprocess.PIPE)
     result,error = p.communicate()
     print "Done!\n"
