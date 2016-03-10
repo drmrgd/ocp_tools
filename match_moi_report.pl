@@ -16,15 +16,15 @@ use Term::ANSIColor;
 use Data::Dump;
 
 # Remove when in prod.
-print "\n";
-print colored("*" x 50, 'bold yellow on_black'), "\n";
-print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
-print colored("      WARN:  \n\tCNV Threshold set to 5% CI >= 4;\n\tMETe14 threshold set to >1000\n", 'bold yellow on_black');
-print colored("*" x 50, 'bold yellow on_black');
-print "\n\n";
+#print "\n";
+#print colored("*" x 50, 'bold yellow on_black'), "\n";
+#print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
+#print colored("      WARN:  \n\tCNV Threshold set to 5% CI >= 4;\n\tMETe14 threshold set to >1000\n", 'bold yellow on_black');
+#print colored("*" x 50, 'bold yellow on_black');
+#print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.9.1_030116";
+my $version = "v4.0.0_031016";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -44,7 +44,7 @@ my $help;
 my $ver_info;
 my $outfile;
 my $freq_cutoff = 5;
-my $cn_cutoff = 4;
+my $cn_cutoff = 7;
 my $raw_output;
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
@@ -266,7 +266,9 @@ sub proc_cnv {
             my @fields = split;
             my $ci_05 = $fields[8];
             my $cn = $fields[10];
-            next unless $ci_05 >= $cn_cutoff;
+            # XXX: Set CNV cutoff here with either 5% CI val and threshold or CN val and threshold
+            #next unless $ci_05 >= $cn_cutoff;
+            next unless $cn >= $cn_cutoff;
             $results{$fields[1]} = [@fields[0,5,8,10,9]];
         }
     }
