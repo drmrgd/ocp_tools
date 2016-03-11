@@ -9,7 +9,7 @@ use List::Util qw(max sum);
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v1.2.0_021816";
+my $version = "v1.3.0_031116";
 my $description = <<"EOT";
 Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR. Can
 report both the internal expression control data and the 5'3'Assay data.  
@@ -18,7 +18,7 @@ EOT
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <vcf_file(s)>
     -F, --FP        Output the 5'3' Assay data.
-    -f, --focus     Data is from the Oncomine Focus Panel (LMNA replaced with LRP1)
+    -O, --OCP       Data is from the Oncomine Comprehensive Panel (LRP1 replaced with LMNA)
     -o, --output    Write output to file <default is STDOUT>
     -v, --version   Display version information
     -h, --help      Display this help text
@@ -28,11 +28,11 @@ my $help;
 my $ver_info;
 my $five_to_three;
 my $outfile;
-my $focus_panel;
+my $ocp_panel;
 
 GetOptions( 
     "FP|F"         => \$five_to_three,
-    "focus|f"      => \$focus_panel,
+    "OCP|O"      => \$ocp_panel,
     "output|o=s"   => \$outfile,
     "help|h"       => \$help,
     "version|v"    => \$ver_info,
@@ -56,9 +56,9 @@ my %results;
 my @expr_controls;
 
 # Need to specify which depending on the panel run.
-($focus_panel) ? 
-    (@expr_controls = qw( LRP1 TBP MYC HMBS ITGB7 Total)) : 
-    (@expr_controls = qw( LMNA TBP MYC HMBS ITGB7 Total ));
+($ocp_panel) ? 
+    (@expr_controls = qw( LMNA TBP MYC HMBS ITGB7 Total )) :
+    (@expr_controls = qw( LRP1 TBP MYC HMBS ITGB7 Total)); 
 
 my @fp_controls = qw( NTRK1_5p3p ALK_5p3p ROS1_5p3p RET_5p3p );
 
