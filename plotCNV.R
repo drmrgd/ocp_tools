@@ -1,6 +1,5 @@
 #!/usr/bin/env Rscript
 version <- '2.0.0_022916'
-library(ggplot2)
 
 file = commandArgs(TRUE)[1]
 correctForTumorContent = (length(commandArgs(TRUE)) > 1)
