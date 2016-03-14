@@ -14,7 +14,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.3.0_110915";
+my $version = "v1.4.0_031416";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -24,6 +24,7 @@ my $usage = <<"EOT";
 USAGE: $scriptname [options] <vcf_file(s)>
     -r, --ref       Include reference variants too (DEFAULT: off)
     -n, --novel     Include 'Novel' fusions in the output (DEFAULT: on)
+    -g, --gene      Only output data for a specific driver gene.
     -o, --output    Write output to file <default =  STDOUT>
     -v, --version   Display version information
     -h, --help      Display this help text
@@ -34,10 +35,12 @@ my $ver_info;
 my $novel=1;
 my $outfile;
 my $ref_calls;
+my $gene;
 
 GetOptions( 
     "ref|r"        => \$ref_calls,
     "novel|n"      => \$novel,
+    "gene|g=s"     => \$gene,
     "output|o=s"   => \$outfile,
     "help|h"       => \$help,
     "version|v"    => \$ver_info,
@@ -145,13 +148,18 @@ for my $input_file ( @files ) {
 # Generate and print out the final results table(s)
 select $out_fh;
 for my $sample ( sort keys %results ) {
-    print "::: Fusions in $sample :::\n\n";
-    if ( $results{$sample} ) {
+    print "::: ";
+    print uc($gene) if $gene;
+    print " Fusions in $sample :::\n\n";
 
+    if ( $results{$sample} ) {
         my $fusion_format = "%-${fwidth}s %-12s %-12s %-15s %-15s\n";
         my @fusion_header = qw (Fusion ID Read_Count Driver_Gene Partner_Gene);
         printf $fusion_format, @fusion_header;
         for (sort { versioncmp($a,$b) } keys %{$results{$sample}} ) {
+            if ($gene) {
+                next unless $results{$sample}->{$_}->{'DRIVER'} eq uc($gene);
+            }
             my ($fusion, $junct, $id ) = split(/\|/);
             printf $fusion_format, "$fusion.$junct", $id, $results{$sample}->{$_}->{'COUNT'}, $results{$sample}->{$_}->{'DRIVER'}, $results{$sample}->{$_}->{'PARTNER'};
         }
