@@ -14,7 +14,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.4.0_031416";
+my $version = "v1.5.0_031716";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -25,6 +25,7 @@ USAGE: $scriptname [options] <vcf_file(s)>
     -r, --ref       Include reference variants too (DEFAULT: off)
     -n, --novel     Include 'Novel' fusions in the output (DEFAULT: on)
     -g, --gene      Only output data for a specific driver gene.
+    -t, --threshold Only report fusions above this threshold (DEFAULT: 25)
     -o, --output    Write output to file <default =  STDOUT>
     -v, --version   Display version information
     -h, --help      Display this help text
@@ -36,14 +37,16 @@ my $novel=1;
 my $outfile;
 my $ref_calls;
 my $gene;
+my $threshold = 25;
 
 GetOptions( 
-    "ref|r"        => \$ref_calls,
-    "novel|n"      => \$novel,
-    "gene|g=s"     => \$gene,
-    "output|o=s"   => \$outfile,
-    "help|h"       => \$help,
-    "version|v"    => \$ver_info,
+    "ref|r"         => \$ref_calls,
+    "novel|n"       => \$novel,
+    "threshold|t=s" => \$threshold,
+    "gene|g=s"      => \$gene,
+    "output|o=s"    => \$outfile,
+    "help|h"        => \$help,
+    "version|v"     => \$ver_info,
 );
 
 sub help { 
@@ -92,8 +95,8 @@ for my $input_file ( @files ) {
         my @data = split;
         if ( grep { /Fusion/ } @data ) {
             my ( $name, $elem ) = $data[2] =~ /(.*?)_([12])$/;
-            #my ($count, $gene) = map { /READ_COUNT=(\d+);GENE_NAME=(.*?);/ } @data;
             my ($count) = map { /READ_COUNT=(\d+)/ } @data;
+            next unless $count >= $threshold;
             my ($pair, $junct, $id) = split(/\./, $name);
             $id //= '-';
 
