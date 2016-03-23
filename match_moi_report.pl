@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.0.1_031716";
+my $version = "v4.0.4_032316";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -44,7 +44,7 @@ my $help;
 my $ver_info;
 my $outfile;
 my $freq_cutoff = 5;
-my $cn_cutoff = 7;
+my $cn_cutoff = 4;
 my $raw_output;
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
@@ -267,8 +267,11 @@ sub proc_cnv {
             my $ci_05 = $fields[8];
             my $cn = $fields[10];
             # XXX: Set CNV cutoff here with either 5% CI val and threshold or CN val and threshold
-            #next unless $ci_05 >= $cn_cutoff;
-            next unless $cn >= $cn_cutoff;
+            if ($cn_cutoff == 4) {
+                next unless $ci_05 >= $cn_cutoff;
+            } else {
+                next unless $cn >= $cn_cutoff;
+            }
             $results{$fields[1]} = [@fields[0,5,8,10,9]];
         }
     }
@@ -390,7 +393,9 @@ sub gen_report {
 
     print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
     print_msg(@formatted_mapd);
-    print_msg( ", 5% CI>= $cn_cutoff) :::\n", "ansi3");
+    my $cnv_param_string; # Want to change output to indicate if we're using 5% CI or CN for the threshold.
+    ($cn_cutoff == 4) ? ($cnv_param_string = ", 5% CI >=" ) : ($cnv_param_string = ", CN >=");
+    print_msg( "$cnv_param_string $cn_cutoff) :::\n", "ansi3");
 
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
