@@ -14,7 +14,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.5.0_031716";
+my $version = "v1.6.0_032416";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -22,18 +22,18 @@ EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <vcf_file(s)>
-    -r, --ref       Include reference variants too (DEFAULT: off)
-    -n, --novel     Include 'Novel' fusions in the output (DEFAULT: on)
+    -r, --ref       Include reference variants too (DEFAULT: OFF).
+    -n, --novel     Include 'Non-Targeted' fusions in the output (DEFAULT: ON).
+    -t, --threshold Only report fusions above this threshold (DEFAULT: 25).
     -g, --gene      Only output data for a specific driver gene.
-    -t, --threshold Only report fusions above this threshold (DEFAULT: 25)
-    -o, --output    Write output to file <default =  STDOUT>
-    -v, --version   Display version information
-    -h, --help      Display this help text
+    -o, --output    Write output to file.
+    -v, --version   Display version information.
+    -h, --help      Display this help text.
 EOT
 
 my $help;
 my $ver_info;
-my $novel=1;
+my $novel_filter;
 my $outfile;
 my $ref_calls;
 my $gene;
@@ -41,7 +41,7 @@ my $threshold = 25;
 
 GetOptions( 
     "ref|r"         => \$ref_calls,
-    "novel|n"       => \$novel,
+    "novel|n"       => \$novel_filter,
     "threshold|t=s" => \$threshold,
     "gene|g=s"      => \$gene,
     "output|o=s"    => \$outfile,
@@ -77,6 +77,9 @@ if ( $outfile ) {
     $out_fh = \*STDOUT;
 }
 
+my $novel;
+($novel_filter) ? ($novel = 0) : ($novel = 1);
+
 my @files = @ARGV;
 
 #######===========================  END ARG Parsing  #######=========================== 
@@ -96,26 +99,16 @@ for my $input_file ( @files ) {
         if ( grep { /Fusion/ } @data ) {
             my ( $name, $elem ) = $data[2] =~ /(.*?)_([12])$/;
             my ($count) = map { /READ_COUNT=(\d+)/ } @data;
-            next unless $count >= $threshold;
+            
             my ($pair, $junct, $id) = split(/\./, $name);
             $id //= '-';
+            next if ($id eq 'Non-Targeted' && ! $novel);
 
             my ($gene1, $gene2) = split(/-/, $pair);
 
             # Filter out ref calls if we don't want to view them
             if ( $count == 0 ) { next unless ( $ref_calls ) }
             my $fid = join('|', $pair, $junct, $id);
-
-            #print "$data[2]  => \n";
-            #print "\tname:  $name\n";
-            #print "\tgene:  $gene\n";
-            #print "\tgene1: $gene1\n";
-            #print "\tgene2: $gene2\n";
-            #print "\tpair:  $pair\n";
-            #print "\tjunct: $junct\n";
-            #print "\tID:   $id\n";
-            #print '-'x50;
-            #print "\n";
 
             if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
                 $results{$sample_name}->{$fid}->{'DRIVER'} = $results{$sample_name}->{$fid}->{'PARTNER'} = $gene1;
@@ -145,9 +138,6 @@ for my $input_file ( @files ) {
     }
 }
 
-#dd \%results;
-#exit;
-
 # Generate and print out the final results table(s)
 select $out_fh;
 for my $sample ( sort keys %results ) {
@@ -164,6 +154,8 @@ for my $sample ( sort keys %results ) {
                 next unless $results{$sample}->{$_}->{'DRIVER'} eq uc($gene);
             }
             my ($fusion, $junct, $id ) = split(/\|/);
+
+            next if $results{$sample}->{$_}->{'COUNT'} < $threshold && ! $ref_calls;
             printf $fusion_format, "$fusion.$junct", $id, $results{$sample}->{$_}->{'COUNT'}, $results{$sample}->{$_}->{'DRIVER'}, $results{$sample}->{$_}->{'PARTNER'};
         }
         print "\n";
