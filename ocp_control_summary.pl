@@ -51,8 +51,13 @@ sub version_info {
 help if $help;
 version_info if $ver_info;
 
+# Make sure enough args passed to script
+if (@ARGV < 1) {
+    print "ERROR: No VCF files passed to script!\n\n"; 
+    print "$usage\n";
+    exit 1;
+}
 my @files = @ARGV;
-die "ERROR: You must input at least one VCF file!\n" unless @files; 
 
 my %results;
 my @expr_controls;
