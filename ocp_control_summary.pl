@@ -9,7 +9,7 @@ use List::Util qw(max sum);
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v1.3.0_031116";
+my $version = "v1.4.0_031116";
 my $description = <<"EOT";
 Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR. Can
 report both the internal expression control data and the 5'3'Assay data.  
@@ -52,6 +52,8 @@ help if $help;
 version_info if $ver_info;
 
 my @files = @ARGV;
+die "ERROR: You must input at least one VCF file!\n" unless @files; 
+
 my %results;
 my @expr_controls;
 
