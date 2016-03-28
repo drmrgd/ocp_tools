@@ -33,8 +33,8 @@ def get_names(string):
 def gen_moi_report(vcf,dna,rna):
     '''Use MATCH MOI Reporter to generate a variant table we can parse later. Gen CLI Opts to determine
     what params to run match_moi_report with'''
-    p=subprocess.Popen(['match_moi_report.pl','-r','-c4','-f0.03',vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    #p=subprocess.Popen(['match_moi_report.pl','-r',vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # p=subprocess.Popen(['match_moi_report.pl','-r','-c4','-f0.03',vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p=subprocess.Popen(['match_moi_report.pl','-r',vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result,error = p.communicate()
     if p.returncode != 0:
         sys.stderr.write("ERROR: Can not process file: {}!".format(vcf))
