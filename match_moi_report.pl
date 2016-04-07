@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.0.4_032316";
+my $version = "v4.0.5_040716";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -100,6 +100,7 @@ for my $prog (@required_programs) {
 
 ########------------------------------ END ARG Parsing ---------------------------------#########
 my $vcf_file = shift;
+die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e $vcf_file;
 
 my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
