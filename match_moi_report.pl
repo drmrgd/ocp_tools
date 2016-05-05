@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.0.5_040716";
+my $version = "v4.1.0_050516";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -36,6 +36,7 @@ USAGE: $scriptname [options] <VCF>
     -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
     -o, --output STR   Send output to custom file.  Default is STDOUT.
     -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
+    -O, --OCP          Data is MATCHv1.0 data from OCP.  Use old LRP1 data for expression control analysis.
     -v, --version      Version information
     -h, --help         Print this help information
 EOT
@@ -46,11 +47,13 @@ my $outfile;
 my $freq_cutoff = 5;
 my $cn_cutoff = 4;
 my $raw_output;
+my $ocp;
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cn|c=i"        => \$cn_cutoff,
             "output|o=s"    => \$outfile,
             "raw|r"         => \$raw_output,
+            "OCP|O"         => \$ocp,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -105,7 +108,9 @@ die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e 
 my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
 my $fusion_data             = proc_fusion(\$vcf_file);
-$$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file);
+my $assay_version;
+($ocp) ? ($assay_version = 'ocp') : ($assay_version = 'matchv2.0');
+$$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file, \$assay_version);
 
 # Print out the combined report
 ($raw_output) ? raw_output( $snv_indel_data, $fusion_data, $cnv_data ) : gen_report( $vcf_file, $snv_indel_data, $fusion_data, $cnv_data );
@@ -246,8 +251,11 @@ sub proc_fusion {
 sub proc_ipc {
     # Get the RNA panel expression control sum 
     my $vcf_file = shift;
+    my $assay_version = shift;
+    my $cmd = "ocp_control_summary.pl $$vcf_file";
+    $cmd .= " -O" if $$assay_version eq 'ocp';
 
-    open( my $vcf_data, '-|', "ocp_control_summary.pl $$vcf_file" ) || die "ERROR: Can't parse the IPC data";
+    open( my $vcf_data, '-|', $cmd ) || die "ERROR: Can't parse the expression control data";
     my ($expr_sum) = map {/\s+(\d+)\s*$/} <$vcf_data>; # trailing whitespace in ocp_control_summary output.
     $expr_sum //= 0;
     return $expr_sum;
