@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.1.1_050516";
+my $version = "v4.1.2_051016";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -83,6 +83,8 @@ my $out_fh;
 if ( $outfile ) {
     print "Writing results to $outfile...\n";
     open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
+} else {
+    $out_fh = \*STDOUT;
 }
 
 if (DEBUG) {
