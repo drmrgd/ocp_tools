@@ -14,7 +14,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.6.0_032416";
+my $version = "v1.7.0_051216";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -22,10 +22,11 @@ EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <vcf_file(s)>
-    -r, --ref       Include reference variants too (DEFAULT: OFF).
+    -R, --Ref       Include reference variants too (DEFAULT: OFF).
     -n, --novel     Include 'Non-Targeted' fusions in the output (DEFAULT: ON).
     -t, --threshold Only report fusions above this threshold (DEFAULT: 25).
     -g, --gene      Only output data for a specific driver gene.
+    -r, --raw       Raw output rather that pretty printed file.
     -o, --output    Write output to file.
     -v, --version   Display version information.
     -h, --help      Display this help text.
@@ -38,13 +39,15 @@ my $outfile;
 my $ref_calls;
 my $gene;
 my $threshold = 25;
+my $raw_output;
 
 GetOptions( 
-    "ref|r"         => \$ref_calls,
+    "Ref|R"         => \$ref_calls,
     "novel|n"       => \$novel_filter,
     "threshold|t=s" => \$threshold,
     "gene|g=s"      => \$gene,
     "output|o=s"    => \$outfile,
+    "raw|r"         => \$raw_output,
     "help|h"        => \$help,
     "version|v"     => \$ver_info,
 );
@@ -141,25 +144,37 @@ for my $input_file ( @files ) {
 # Generate and print out the final results table(s)
 select $out_fh;
 for my $sample ( sort keys %results ) {
-    print "::: ";
-    print uc($gene) if $gene;
-    print " Fusions in $sample :::\n\n";
-
+    unless ($raw_output) {
+        print "::: ";
+        print uc($gene) if $gene;
+        print " Fusions in $sample :::\n\n";
+    }
+    
     if ( $results{$sample} ) {
         my $fusion_format = "%-${fwidth}s %-12s %-12s %-15s %-15s\n";
         my @fusion_header = qw (Fusion ID Read_Count Driver_Gene Partner_Gene);
-        printf $fusion_format, @fusion_header;
-        for (sort { versioncmp($a,$b) } keys %{$results{$sample}} ) {
+        printf $fusion_format, @fusion_header unless $raw_output;
+        for (sort { versioncmp($a,$b) } keys %{$results{$sample}}) {
             if ($gene) {
                 next unless $results{$sample}->{$_}->{'DRIVER'} eq uc($gene);
             }
             my ($fusion, $junct, $id ) = split(/\|/);
-
             next if $results{$sample}->{$_}->{'COUNT'} < $threshold && ! $ref_calls;
-            printf $fusion_format, "$fusion.$junct", $id, $results{$sample}->{$_}->{'COUNT'}, $results{$sample}->{$_}->{'DRIVER'}, $results{$sample}->{$_}->{'PARTNER'};
+            print_data(\$sample, "$fusion.$junct", \$id, $results{$sample}->{$_}, \$fusion_format);
         }
-        print "\n";
+        #print "\n";
     } else {
-        print "\t\t\t<<< No Fusions Detected >>>\n\n";
+        print "\t\t\t<<< No Fusions Detected >>>\n\n" unless $raw_output;
     }
+}
+
+sub print_data {
+    my ($sample_name,$fusion_name,$id,$data,$format) = @_;
+
+    if ($raw_output) {
+        print join(',', $$sample_name, $fusion_name, $$id, $$data{'COUNT'}, $$data{'DRIVER'}), "\n";
+    } else {
+        printf $$format, $fusion_name, $$id, $$data{'COUNT'}, $$data{'DRIVER'}, $$data{'PARTNER'};
+    }
+    return;
 }
