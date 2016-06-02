@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.1.2_051016";
+my $version = "v4.2.0_060216";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -34,6 +34,7 @@ my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
     -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: 5%)
     -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
+    -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
     -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
     -O, --OCP          Data is MATCHv1.0 data from OCP.  Use old LRP1 data for expression control analysis.
@@ -46,6 +47,7 @@ my $ver_info;
 my $outfile;
 my $freq_cutoff = 5;
 my $cn_cutoff = 4;
+my $read_count = 1000;
 my $raw_output;
 my $ocp;
 
@@ -54,6 +56,7 @@ GetOptions( "freq|f=f"      => \$freq_cutoff,
             "output|o=s"    => \$outfile,
             "raw|r"         => \$raw_output,
             "OCP|O"         => \$ocp,
+            "Reads|R=i"     => \$read_count,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -90,9 +93,10 @@ if ( $outfile ) {
 if (DEBUG) {
     print "======================================  DEBUG  ======================================\n";
     print "Params as passed into script:\n";
-    print "\tCNV Threshold  => $cn_cutoff\n";
-    print "\tVAF Threshold  => $freq_cutoff\n";
-    print "\tOutput File    => ";
+    print "\tCNV Threshold    => $cn_cutoff\n";
+    print "\tVAF Threshold    => $freq_cutoff\n";
+    print "\tFusion Threshold => $read_count\n";
+    print "\tOutput File      => ";
     ($outfile) ? print " $outfile\n" : print "\n";
     print "=====================================================================================\n\n";
 }
@@ -227,11 +231,14 @@ sub proc_fusion {
         my @fields = split;
 
         # Get rid of Fusions that are below our thresholds
-        if ( $fields[1] eq 'DelPositive' || $fields[0] eq 'MET-MET.M13M15' ) {
-            next if $fields[2] < 1000;
-        } else {
-            next if $fields[2] < 25;
-        }
+        #if ( $fields[1] eq 'DelPositive' || $fields[0] eq 'MET-MET.M13M15' ) {
+            #next if $fields[2] < 1000;
+        #} else {
+            #next if $fields[2] < 25;
+        #}
+
+        # Unifying the fusion threshold for both inter and intra-genic fusions now.
+        next if $fields[2] < $read_count;
 
         #my $fid = join( '|', $pair, $junct, $id );
         $fields[0] =~ s/\./|/;
