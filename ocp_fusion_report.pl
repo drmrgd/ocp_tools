@@ -14,7 +14,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.8.1_051916";
+my $version = "v1.9.0_060216";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -89,7 +89,7 @@ my @genes_list = map{uc($_)} split(/,/, $gene) if $gene;
 #######===========================  END ARG Parsing  #######=========================== 
 my %results;
 my $fwidth=0;
-my @drivers = qw( ABL1 AKT3 ALK AXL BRAF CDK4 EGFR ERBB2 ERG ETV1 ETV1a ETV1b ETV4 ETV4a ETV5 ETV5a ETV5b ETV5d 
+my @drivers = qw( ABL1 AKT3 ALK AXL BRAF EGFR ERBB2 ERG ETV1 ETV1a ETV1b ETV4 ETV4a ETV5 ETV5a ETV5b ETV5d 
                   FGFR1 FGFR2 FGFR3 MET NTRK1 NTRK2 NTRK3 PDGFRA PPARG RAF1 RET ROS1);
 
 for my $input_file ( @files ) {
