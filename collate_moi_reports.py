@@ -18,7 +18,7 @@ from natsort import natsorted
 from collections import defaultdict
 from pprint import pprint
 
-version = '1.0.0_060316'
+version = '1.1.0_060316'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -31,8 +31,14 @@ def get_args():
             version = '%(prog)s - ' + version,
             )
     parser.add_argument('vcf_files', nargs='+', help='List of VCF files to process.')
+    parser.add_argument('-q','--quiet', action='store_true', help='Suppress warning and extra output')
+    parser.add_argument('-o','--output', help='Output to file rather than STDOUT ***NOT YET IMPLEMENTED***')
     args = parser.parse_args()
-    return args.vcf_files
+
+    global quiet
+    quiet = args.quiet
+
+    return args
 
 def get_names(string):
     string = os.path.basename(string)
@@ -41,7 +47,9 @@ def get_names(string):
         dna_samp = match.group(1)
         rna_samp = match.group(2)
     except:
-        sys.stderr.write("WARN: Can not get DNA or RNA sample name for '%s'! Using full VCF filename instead\n" % string)
+        if not quiet:
+            sys.stderr.write("WARN: Can not get DNA or RNA sample name for '%s'! Using full VCF filename instead\n" % string)
+            
         dna_samp = rna_samp = string.rstrip('.vcf')
     return dna_samp, rna_samp
 
@@ -116,9 +124,10 @@ def print_data(var_type,data):
     return
 
 def main():
-    vcf_files = get_args()
+    args = get_args()
+    vcf_files = args.vcf_files
     moi_data = defaultdict(dict)
-
+    
     for vcf in vcf_files:
         (dna, rna) = get_names(vcf)
         moi_data[vcf] = gen_moi_report(vcf,dna,rna)
