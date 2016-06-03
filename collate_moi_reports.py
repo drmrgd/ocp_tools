@@ -18,7 +18,7 @@ from natsort import natsorted
 from collections import defaultdict
 from pprint import pprint
 
-version = '1.1.0_060316'
+version = '1.2.0_060316'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -133,6 +133,10 @@ def main():
         moi_data[vcf] = gen_moi_report(vcf,dna,rna)
 
     # Set up and print report header
+    if args.output:
+        print "Writing output to '%s'" % args.output
+        sys.stdout = open(args.output, 'w')
+
     header = ['Sample', 'Gene', 'Position', 'Ref', 'Alt', 'VARID', 'Type', 'VAF/CN', 'Coverage/Counts', 
             'RefCov', 'AltCov']
     print ','.join(header)
