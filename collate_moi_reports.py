@@ -13,11 +13,26 @@ import os
 import re
 import subprocess
 import operator
+import argparse
 from natsort import natsorted
 from collections import defaultdict
 from pprint import pprint
 
-VERSION = '0.9.2_022316'
+version = '1.0.0_060316'
+
+def get_args():
+    parser = argparse.ArgumentParser(
+            formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position = 100, width=200),
+            description = '''
+            Collect MOI reports for a set of VCF files and output a raw CSV formatted output that can be
+            easily imported into Microsoft Excel for reporting.  This script relies on `match_moi_report.pl`
+            in order to generate the MOI reports for each.
+            ''',
+            version = '%(prog)s - ' + version,
+            )
+    parser.add_argument('vcf_files', nargs='+', help='List of VCF files to process.')
+    args = parser.parse_args()
+    return args.vcf_files
 
 def get_names(string):
     string = os.path.basename(string)
@@ -89,7 +104,9 @@ def parse_data(report_data,dna,rna):
 
 def print_data(var_type,data):
     # Split the key by a colon and sort based on chr and then pos using the natsort library
-    if var_type == 'snv_data':
+    if var_type == 'null':
+        print ','.join(data['no_result'])
+    elif var_type == 'snv_data':
         for variant in natsorted(data.keys(), key=lambda k: (k.split(':')[1], k.split(':')[2])):
             # sys.stdout.write('{} => '.format(variant))
             print ','.join(data[variant])
@@ -99,12 +116,11 @@ def print_data(var_type,data):
     return
 
 def main():
-    vcf_files = sys.argv[1:]
+    vcf_files = get_args()
     moi_data = defaultdict(dict)
 
     for vcf in vcf_files:
         (dna, rna) = get_names(vcf)
-        # print "dna: {}\nrna: {}".format(dna, rna)
         moi_data[vcf] = gen_moi_report(vcf,dna,rna)
 
     # Set up and print report header
@@ -113,10 +129,13 @@ def main():
     print ','.join(header)
     
     # Print out sample data by VCF
-    var_types = ['snv_data', 'cnv_data', 'fusion_data']
+    var_types = ['snv_data', 'cnv_data', 'fusion_data', 'null']
     for sample in sorted(moi_data):
         for var_type in var_types:
-            print_data(var_type,moi_data[sample][var_type])
+            try:
+                print_data(var_type,moi_data[sample][var_type])
+            except KeyError:
+                continue
 
 if __name__ == '__main__':
     main()
