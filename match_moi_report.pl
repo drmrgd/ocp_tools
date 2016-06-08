@@ -37,6 +37,7 @@ USAGE: $scriptname [options] <VCF>
     -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
     -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
+    -n, --nofilter     Output filtered out variants anyway, with a flag to indicate why filtered.
     -O, --OCP          Data is MATCHv1.0 data from OCP.  Use old LRP1 data for expression control analysis.
     -v, --version      Version information
     -h, --help         Print this help information
