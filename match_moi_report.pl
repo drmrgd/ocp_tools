@@ -37,7 +37,6 @@ USAGE: $scriptname [options] <VCF>
     -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
     -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
-    -n, --nofilter     Output filtered out variants anyway, with a flag to indicate why filtered.
     -O, --OCP          Data is MATCHv1.0 data from OCP.  Use old LRP1 data for expression control analysis.
     -v, --version      Version information
     -h, --help         Print this help information
@@ -50,14 +49,12 @@ my $freq_cutoff = 5;
 my $cn_cutoff = 4;
 my $read_count = 1000;
 my $raw_output;
-my $nofilter; # Retain filtered out calls.
 my $ocp;
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cn|c=i"        => \$cn_cutoff,
             "output|o=s"    => \$outfile,
             "raw|r"         => \$raw_output,
-            "n|nofilter"    => \$nofilter,
             "OCP|O"         => \$ocp,
             "Reads|R=i"     => \$read_count,
             "version|v"     => \$ver_info,
@@ -174,17 +171,7 @@ sub proc_snv_indel {
         next unless /^chr/;
         my @fields = split;
         my $id = join(':', @fields[0..2]);
-
-        # Output blacklisted variants but with a flag if we want to.
-        # XXXX
-        #next if grep {$id eq $_} @blacklisted_variants;
-        if ($nofilter) {
-            if (grep {$id eq $_} @blacklisted_variants) {
-                $id .= "_BL";
-            }
-        } else {
-            next if grep {$id eq $_} @blacklisted_variants;
-        }
+        next if grep {$id eq $_} @blacklisted_variants;
 
         # Map these variables to make typing easier and the code cleaner downstream
         my $vaf        = $fields[3];
