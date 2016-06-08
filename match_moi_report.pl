@@ -46,11 +46,13 @@ my $outfile;
 my $freq_cutoff = 5;
 my $cn_cutoff = 7;
 my $raw_output;
+my $nofilter; # Retain filtered out calls.
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cn|c=i"        => \$cn_cutoff,
             "output|o=s"    => \$outfile,
             "raw|r"         => \$raw_output,
+            "n|nofilter"    => \$nofilter,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -159,7 +161,17 @@ sub proc_snv_indel {
         next unless /^chr/;
         my @fields = split;
         my $id = join(':', @fields[0..2]);
-        next if grep {$id eq $_} @blacklisted_variants;
+
+        # Output blacklisted variants but with a flag if we want to.
+        # XXXX
+        #next if grep {$id eq $_} @blacklisted_variants;
+        if ($nofilter) {
+            if (grep {$id eq $_} @blacklisted_variants) {
+                $id .= "_BL";
+            }
+        } else {
+            next if grep {$id eq $_} @blacklisted_variants;
+        }
 
         # Map these variables to make typing easier and the code cleaner downstream
         my $vaf        = $fields[3];
