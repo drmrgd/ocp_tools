@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.0.0_031016";
+my $version = "v4.2.0_060216";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -34,8 +34,10 @@ my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
     -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: 5%)
     -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
+    -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
     -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
+    -O, --OCP          Data is MATCHv1.0 data from OCP.  Use old LRP1 data for expression control analysis.
     -v, --version      Version information
     -h, --help         Print this help information
 EOT
@@ -44,15 +46,19 @@ my $help;
 my $ver_info;
 my $outfile;
 my $freq_cutoff = 5;
-my $cn_cutoff = 7;
+my $cn_cutoff = 4;
+my $read_count = 1000;
 my $raw_output;
 my $nofilter; # Retain filtered out calls.
+my $ocp;
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cn|c=i"        => \$cn_cutoff,
             "output|o=s"    => \$outfile,
             "raw|r"         => \$raw_output,
             "n|nofilter"    => \$nofilter,
+            "OCP|O"         => \$ocp,
+            "Reads|R=i"     => \$read_count,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -82,14 +88,17 @@ my $out_fh;
 if ( $outfile ) {
     print "Writing results to $outfile...\n";
     open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
+} else {
+    $out_fh = \*STDOUT;
 }
 
 if (DEBUG) {
     print "======================================  DEBUG  ======================================\n";
     print "Params as passed into script:\n";
-    print "\tCNV Threshold  => $cn_cutoff\n";
-    print "\tVAF Threshold  => $freq_cutoff\n";
-    print "\tOutput File    => ";
+    print "\tCNV Threshold    => $cn_cutoff\n";
+    print "\tVAF Threshold    => $freq_cutoff\n";
+    print "\tFusion Threshold => $read_count\n";
+    print "\tOutput File      => ";
     ($outfile) ? print " $outfile\n" : print "\n";
     print "=====================================================================================\n\n";
 }
@@ -102,11 +111,14 @@ for my $prog (@required_programs) {
 
 ########------------------------------ END ARG Parsing ---------------------------------#########
 my $vcf_file = shift;
+die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e $vcf_file;
 
 my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
 my $fusion_data             = proc_fusion(\$vcf_file);
-$$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file);
+my $assay_version;
+($ocp) ? ($assay_version = 'ocp') : ($assay_version = 'matchv2.0');
+$$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file, \$assay_version);
 
 # Print out the combined report
 ($raw_output) ? raw_output( $snv_indel_data, $fusion_data, $cnv_data ) : gen_report( $vcf_file, $snv_indel_data, $fusion_data, $cnv_data );
@@ -231,11 +243,14 @@ sub proc_fusion {
         my @fields = split;
 
         # Get rid of Fusions that are below our thresholds
-        if ( $fields[1] eq 'DelPositive' || $fields[0] eq 'MET-MET.M13M15' ) {
-            next if $fields[2] < 1000;
-        } else {
-            next if $fields[2] < 25;
-        }
+        #if ( $fields[1] eq 'DelPositive' || $fields[0] eq 'MET-MET.M13M15' ) {
+            #next if $fields[2] < 1000;
+        #} else {
+            #next if $fields[2] < 25;
+        #}
+
+        # Unifying the fusion threshold for both inter and intra-genic fusions now.
+        next if $fields[2] < $read_count;
 
         #my $fid = join( '|', $pair, $junct, $id );
         $fields[0] =~ s/\./|/;
@@ -257,8 +272,11 @@ sub proc_fusion {
 sub proc_ipc {
     # Get the RNA panel expression control sum 
     my $vcf_file = shift;
+    my $assay_version = shift;
+    my $cmd = "ocp_control_summary.pl $$vcf_file";
+    $cmd .= " -O" if $$assay_version eq 'ocp';
 
-    open( my $vcf_data, '-|', "ocp_control_summary.pl -f $$vcf_file" ) || die "ERROR: Can't parse the IPC data";
+    open( my $vcf_data, '-|', $cmd ) || die "ERROR: Can't parse the expression control data";
     my ($expr_sum) = map {/\s+(\d+)\s*$/} <$vcf_data>; # trailing whitespace in ocp_control_summary output.
     $expr_sum //= 0;
     return $expr_sum;
@@ -279,8 +297,11 @@ sub proc_cnv {
             my $ci_05 = $fields[8];
             my $cn = $fields[10];
             # XXX: Set CNV cutoff here with either 5% CI val and threshold or CN val and threshold
-            #next unless $ci_05 >= $cn_cutoff;
-            next unless $cn >= $cn_cutoff;
+            if ($cn_cutoff == 4) {
+                next unless $ci_05 >= $cn_cutoff;
+            } else {
+                next unless $cn >= $cn_cutoff;
+            }
             $results{$fields[1]} = [@fields[0,5,8,10,9]];
         }
     }
@@ -337,6 +358,7 @@ sub raw_output {
     # Generate a raw data dump so that we can import this data easily into another tool for further parsing.
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
     my $mapd = $$cnv_data{'META'}[2];
+    select $out_fh;
 
     for my $var (sort{ versioncmp( $a, $b ) } keys %$snv_indels) {
         print join(',', 'SNV', @{$$snv_indels{$var}}), "\n";
@@ -402,7 +424,9 @@ sub gen_report {
 
     print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
     print_msg(@formatted_mapd);
-    print_msg( ", 5% CI>= $cn_cutoff) :::\n", "ansi3");
+    my $cnv_param_string; # Want to change output to indicate if we're using 5% CI or CN for the threshold.
+    ($cn_cutoff == 4) ? ($cnv_param_string = ", 5% CI >=" ) : ($cnv_param_string = ", CN >=");
+    print_msg( "$cnv_param_string $cn_cutoff) :::\n", "ansi3");
 
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );

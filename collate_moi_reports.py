@@ -13,11 +13,32 @@ import os
 import re
 import subprocess
 import operator
+import argparse
 from natsort import natsorted
 from collections import defaultdict
 from pprint import pprint
 
-VERSION = '0.9.2_022316'
+version = '1.2.0_060316'
+
+def get_args():
+    parser = argparse.ArgumentParser(
+            formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position = 100, width=200),
+            description = '''
+            Collect MOI reports for a set of VCF files and output a raw CSV formatted output that can be
+            easily imported into Microsoft Excel for reporting.  This script relies on `match_moi_report.pl`
+            in order to generate the MOI reports for each.
+            ''',
+            version = '%(prog)s - ' + version,
+            )
+    parser.add_argument('vcf_files', nargs='+', help='List of VCF files to process.')
+    parser.add_argument('-q','--quiet', action='store_true', help='Suppress warning and extra output')
+    parser.add_argument('-o','--output', help='Output to file rather than STDOUT ***NOT YET IMPLEMENTED***')
+    args = parser.parse_args()
+
+    global quiet
+    quiet = args.quiet
+
+    return args
 
 def get_names(string):
     string = os.path.basename(string)
@@ -26,15 +47,17 @@ def get_names(string):
         dna_samp = match.group(1)
         rna_samp = match.group(2)
     except:
-        sys.stderr.write("WARN: Can not get DNA or RNA sample name for '%s'! Using full VCF filename instead\n" % string)
+        if not quiet:
+            sys.stderr.write("WARN: Can not get DNA or RNA sample name for '%s'! Using full VCF filename instead\n" % string)
+            
         dna_samp = rna_samp = string.rstrip('.vcf')
     return dna_samp, rna_samp
 
 def gen_moi_report(vcf,dna,rna):
     '''Use MATCH MOI Reporter to generate a variant table we can parse later. Gen CLI Opts to determine
     what params to run match_moi_report with'''
-    p=subprocess.Popen(['match_moi_report.pl','-r','-c4','-f0.03',vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    #p=subprocess.Popen(['match_moi_report.pl','-r',vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # p=subprocess.Popen(['match_moi_report.pl','-r','-c4','-f0.03',vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p=subprocess.Popen(['match_moi_report.pl','-r',vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result,error = p.communicate()
     if p.returncode != 0:
         sys.stderr.write("ERROR: Can not process file: {}!".format(vcf))
@@ -89,7 +112,9 @@ def parse_data(report_data,dna,rna):
 
 def print_data(var_type,data):
     # Split the key by a colon and sort based on chr and then pos using the natsort library
-    if var_type == 'snv_data':
+    if var_type == 'null':
+        print ','.join(data['no_result'])
+    elif var_type == 'snv_data':
         for variant in natsorted(data.keys(), key=lambda k: (k.split(':')[1], k.split(':')[2])):
             # sys.stdout.write('{} => '.format(variant))
             print ','.join(data[variant])
@@ -99,24 +124,31 @@ def print_data(var_type,data):
     return
 
 def main():
-    vcf_files = sys.argv[1:]
+    args = get_args()
+    vcf_files = args.vcf_files
     moi_data = defaultdict(dict)
-
+    
     for vcf in vcf_files:
         (dna, rna) = get_names(vcf)
-        # print "dna: {}\nrna: {}".format(dna, rna)
         moi_data[vcf] = gen_moi_report(vcf,dna,rna)
 
     # Set up and print report header
+    if args.output:
+        print "Writing output to '%s'" % args.output
+        sys.stdout = open(args.output, 'w')
+
     header = ['Sample', 'Gene', 'Position', 'Ref', 'Alt', 'VARID', 'Type', 'VAF/CN', 'Coverage/Counts', 
             'RefCov', 'AltCov']
     print ','.join(header)
     
     # Print out sample data by VCF
-    var_types = ['snv_data', 'cnv_data', 'fusion_data']
+    var_types = ['snv_data', 'cnv_data', 'fusion_data', 'null']
     for sample in sorted(moi_data):
         for var_type in var_types:
-            print_data(var_type,moi_data[sample][var_type])
+            try:
+                print_data(var_type,moi_data[sample][var_type])
+            except KeyError:
+                continue
 
 if __name__ == '__main__':
     main()
