@@ -46,7 +46,7 @@ my $help;
 my $ver_info;
 my $outfile;
 my $freq_cutoff = 5;
-my $cn_cutoff = 4;
+my $cn_cutoff = 7; # if set to 4, will use 5% CI.  Else will use CN as the threshold.  No need to specify.
 my $read_count = 1000;
 my $raw_output;
 my $ocp;
