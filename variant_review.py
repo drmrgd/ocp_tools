@@ -11,7 +11,7 @@ import fnmatch
 from time import sleep
 from pprint import pprint
 
-version = '1.3.0_010416'
+version = '1.4.0_062916'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -26,10 +26,12 @@ def get_args():
     parser.add_argument("rna_bam", help='RNA BAM file from MATCHBox.')
     parser.add_argument('-a', '--analysis_id', metavar='<ir_analysis_id>', 
             help='The IR analysis ID that will be used to pull the data from the IR server if different than in BAM name')
+    parser.add_argument('-t', '--token', metavar='<ir_token_path>', 
+            help='The path to the Ion Reporter token file used to pull the analysis from the server')
+    parser.add_argument('-s', '--site', metavar='<match_site_id>', default='nci',
+            help='The site ID used in the ir_api_retrieve script to pull out the data (DEFAULT: %(default)s)')
 
     requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument('-s', '--site', metavar='<match_site_id>', default='nci',
-            help='The site ID used in the ir_api_retrieve script to pull out the data (DEFAULT: %(default)s)')
     requiredNamed.add_argument('-p', '--psn', metavar='<PSN>', required=True,
             help='PSN for this case')
     requiredNamed.add_argument('-m', '--msn', metavar='<MSN>', required=True,
@@ -65,7 +67,15 @@ def get_args():
     else:
         run_id = ''
 
-    return (dna_bam, rna_bam, psn, msn, site, run_id)
+    # Check for and hand the IR token file.
+    token = os.environ['HOME'] + 'Dropbox/ir_stuff/ir_token'
+    if args.token:
+        token = args.token
+        if not os.path.exists(token):
+            print "ERROR: The IR token file '%s' can not be found! You might need to load a custom token with the '-t' option." % token
+            sys.exit(1)
+
+    return (dna_bam, rna_bam, psn, msn, site, run_id, token)
 
 def gen_wd(psn,msn):
     new_dir = psn +'_'+ msn +'_variant_reports'
@@ -137,13 +147,13 @@ def validate_bams(msn, bam, na_type):
 
     return (new_file_name, analysis_id)
 
-def get_ir_data(analysis_id):
+def get_ir_data(analysis_id, token):
     '''Use ir_api_retrieve and extract_ir_data to get IR data for review'''
 
     print 'Getting data from IR for analysis ID {}...'.format(analysis_id)
     count = 1
     while count:
-        p = subprocess.Popen(['ir_api_retrieve.py', '-H','nci', analysis_id],stdout=subprocess.PIPE,stderr=subprocess.PIPE) 
+        p = subprocess.Popen(['ir_api_retrieve.py', '-H','nci', '-t', token, analysis_id],stdout=subprocess.PIPE,stderr=subprocess.PIPE) 
         result,error = p.communicate()
         if p.returncode != 0:
             sys.stderr.write("Error retrieving data: {}".format(error))
@@ -175,7 +185,7 @@ def gen_moi_report(msn,vcf):
     return
 
 def main():
-    (dna_bam, rna_bam, psn, msn, site,analysis_id) = get_args()
+    (dna_bam, rna_bam, psn, msn, site, analysis_id, token) = get_args()
 
     print "Validating DNA and RNA BAM files..."
     (new_dna_bam, dna_run_id) = validate_bams(msn, dna_bam, 'dna')
@@ -196,7 +206,7 @@ def main():
         else:
             print "ERROR: DNA and RNA Analysis IDs do not agree!\n\tDNA: %s\n\tRNA: %s" % (dna_run_id, rna_run_id)
             sys.exit(1)
-    get_ir_data(analysis_id)
+    get_ir_data(analysis_id, token)
 
     # Get the VCF file for processing.
     files = os.listdir('vcfs')
