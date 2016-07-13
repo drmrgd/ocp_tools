@@ -11,7 +11,7 @@ import fnmatch
 from time import sleep
 from pprint import pprint
 
-version = '1.4.0_062916'
+version = '1.4.1_071316'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -68,12 +68,12 @@ def get_args():
         run_id = ''
 
     # Check for and hand the IR token file.
-    token = os.environ['HOME'] + 'Dropbox/ir_stuff/ir_token'
+    token = os.environ['HOME'] + '/Dropbox/ir_stuff/ir_tokens'
     if args.token:
         token = args.token
-        if not os.path.exists(token):
-            print "ERROR: The IR token file '%s' can not be found! You might need to load a custom token with the '-t' option." % token
-            sys.exit(1)
+    if not os.path.exists(token):
+        print "ERROR: The IR token file '%s' can not be found! You might need to load a custom token with the '-t' option." % token
+        sys.exit(1)
 
     return (dna_bam, rna_bam, psn, msn, site, run_id, token)
 
