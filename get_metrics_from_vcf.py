@@ -11,7 +11,7 @@ import subprocess
 from pprint import pprint
 
 
-version = '2.0.0_060816'
+version = '2.0.1_060816'
 
 def read_vcf(vcf_file):
     mapd_value = ''
@@ -39,6 +39,10 @@ def get_name(vcf):
     sample_name = ''
     dna_name = ''
     rna_name = ''
+
+    # If this is MATCHBox data, we always start with 'MSN####'
+    if name_elems[0].startswith('MSN'):
+        return name_elems[0]
 
     try:
         if name_elems[0] == name_elems[2]:
