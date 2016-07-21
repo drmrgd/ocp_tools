@@ -443,7 +443,7 @@ sub gen_report {
             print_msg(sprintf('%-9s %-10s %-6s %-10.3f ', $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1,2]));
             my @formatted_copy_number = sprintf('%-10.1f ', $$cnv_data{$cnv}[3]);
             ($$cnv_data{$cnv}[3] < 1) ? 
-                push(@formatted_copy_number,'bold red on_black') : push(@formatted_copy_number,'ansi3');
+                push(@formatted_copy_number,'bold red on_black') : push(@formatted_copy_number,'bold green on_black');
             print_msg(@formatted_copy_number);
             print_msg(sprintf("%-10.3f\n", $$cnv_data{$cnv}[4]));
         }
@@ -474,7 +474,7 @@ sub gen_report {
     print_msg(@read_count);
     print_msg(', Sum Expression Control Reads: ','ansi3');
     print_msg(@ipc_output);
-    print_msg( ") :::\n",'ansi3');
+    print_msg( ", Threshold: $read_count) :::\n",'ansi3');
 
     ($w1) = field_width( $fusion_data, 'fusion' );
     my $fusion_format = "%-${w1}s %-12s %-12s %-15s %-15s\n";
