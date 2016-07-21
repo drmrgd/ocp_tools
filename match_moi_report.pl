@@ -23,8 +23,10 @@ use Data::Dump;
 #print colored("*" x 50, 'bold yellow on_black');
 #print "\n\n";
 
+my $experimental = 1;
+
 my $scriptname = basename($0);
-my $version = "v4.2.0_060216";
+my $version = "v4.3.0_072116";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -33,6 +35,8 @@ EOT
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
     -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: 5%)
+    --cu         INT   EXPERIMENTAL: Set upper bound for amplifications (DEFAULT 5% CI >= 4) 
+    --cl         INT   EXPERIMENTAL: Set lower bound for deletions (DEFAULT 95% CI <= 1) 
     -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
     -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
@@ -47,12 +51,16 @@ my $ver_info;
 my $outfile;
 my $freq_cutoff = 5;
 my $cn_cutoff = 4; # if set to 4, will use 5% CI.  Else will use CN as the threshold.  No need to specify.
+my $cn_upper_cutoff = 4; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
+my $cn_lower_cutoff = 1; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
 my $read_count = 100;
 my $raw_output;
 my $ocp;
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cn|c=i"        => \$cn_cutoff,
+            "cu=i"          => \$cn_upper_cutoff,
+            "cl=i"          => \$cn_lower_cutoff,
             "output|o=s"    => \$outfile,
             "raw|r"         => \$raw_output,
             "OCP|O"         => \$ocp,
@@ -104,7 +112,7 @@ if (DEBUG) {
 # Check ENV for required programs
 my @required_programs = qw( vcfExtractor.pl ocp_cnv_report.pl ocp_control_summary.pl ocp_fusion_report.pl );
 for my $prog (@required_programs) {
-    die "ERROR: '$prog' is required, but not found in your path!\n" unless `which $prog`;
+    die "ERROR: '$prog' is required, but not found in your path!\n" unless qx(which $prog);
 }
 
 ########------------------------------ END ARG Parsing ---------------------------------#########
@@ -283,14 +291,23 @@ sub proc_cnv {
         elsif (/^chr/) {
             my @fields = split;
             my $ci_05 = $fields[8];
+            my $ci_95 = $fields[9];
             my $cn = $fields[10];
-            # XXX: Set CNV cutoff here with either 5% CI val and threshold or CN val and threshold
-            if ($cn_cutoff == 4) {
-                next unless $ci_05 >= $cn_cutoff;
+            # XXX: 
+            #     Set CNV cutoff here with either 5% CI val and threshold or CN val and threshold
+            #     Try to setup reporting of both amplifications and deletions (95% CI < 1).
+            if ($experimental) {
+                if ($ci_05 >= $cn_upper_cutoff || $ci_95 <= $cn_lower_cutoff) {
+                    $results{$fields[1]} = [@fields[0,5,8,10,9]];
+                }
             } else {
-                next unless $cn >= $cn_cutoff;
+                if ($cn_cutoff == 4) {
+                    next unless $ci_05 >= $cn_cutoff;
+                } else {
+                    next unless $cn >= $cn_cutoff;
+                }
+                $results{$fields[1]} = [@fields[0,5,8,10,9]];
             }
-            $results{$fields[1]} = [@fields[0,5,8,10,9]];
         }
     }
     $results{'META'} = [$gender, $cellularity, $mapd];
@@ -419,9 +436,16 @@ sub gen_report {
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
     print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
+    # XXX
     if ( %$cnv_data ) {
         for my $cnv ( sort{ versioncmp( $$cnv_data{$a}->[0], $$cnv_data{$b}->[0] ) } keys %$cnv_data ) {
-            print_msg(sprintf($cnv_format, $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
+            #print_msg(sprintf($cnv_format, $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
+            print_msg(sprintf('%-9s %-10s %-6s %-10.3f ', $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1,2]));
+            my @formatted_copy_number = sprintf('%-10.1f ', $$cnv_data{$cnv}[3]);
+            ($$cnv_data{$cnv}[3] < 1) ? 
+                push(@formatted_copy_number,'bold red on_black') : push(@formatted_copy_number,'ansi3');
+            print_msg(@formatted_copy_number);
+            print_msg(sprintf("%-10.3f\n", $$cnv_data{$cnv}[4]));
         }
     } else {
         print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
