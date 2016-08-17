@@ -38,7 +38,7 @@ USAGE: $scriptname [options] <VCF>
     --cu         INT   EXPERIMENTAL: Set upper bound for amplifications (DEFAULT 5% CI >= 4) 
     --cl         INT   EXPERIMENTAL: Set lower bound for deletions (DEFAULT 95% CI <= 1) 
     -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
-    -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
+    -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 100 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
     -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
     -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. Due to noise NOCALL is always on in SNV / Indel space.
