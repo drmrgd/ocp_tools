@@ -26,7 +26,7 @@ use Data::Dump;
 my $experimental = 1;
 
 my $scriptname = basename($0);
-my $version = "v4.3.0_072116";
+my $version = "v4.3.1_081716";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -41,6 +41,7 @@ USAGE: $scriptname [options] <VCF>
     -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
     -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
+    -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. Due to noise NOCALL is always on in SNV / Indel space.
     -O, --OCP          Data is MATCHv1.0 data from OCP.  Use old LRP1 data for expression control analysis.
     -v, --version      Version information
     -h, --help         Print this help information
@@ -56,6 +57,7 @@ my $cn_lower_cutoff = 1; # Configure to capture upper and lower bound CNs in an 
 my $read_count = 100;
 my $raw_output;
 my $ocp;
+my $nocall;
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cn|c=i"        => \$cn_cutoff,
@@ -65,6 +67,7 @@ GetOptions( "freq|f=f"      => \$freq_cutoff,
             "raw|r"         => \$raw_output,
             "OCP|O"         => \$ocp,
             "Reads|R=i"     => \$read_count,
+            "nocall|n"      => \$nocall,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -232,18 +235,14 @@ sub proc_fusion {
     my $vcf_file = shift;
     my %results;
 
-    open(my $vcf_data, '-|', "ocp_fusion_report.pl $$vcf_file") or die "ERROR: Can't parse VCF file for fusions!";
+    my $cmd;
+    ($nocall) ? ($cmd = qq(ocp_fusion_report.pl -N $$vcf_file)) : ($cmd = qq(ocp_fusion_report.pl $$vcf_file));
+    #open(my $vcf_data, '-|', "ocp_fusion_report.pl $$vcf_file") or die "ERROR: Can't parse VCF file for fusions!";
+    open(my $vcf_data, '-|', $cmd) or die "ERROR: Can't parse VCF file for fusions!";
     while (<$vcf_data>) {
         # Skip header and blank lines
         next if $. < 4 || $_ =~ /^\s*$/;
         my @fields = split;
-
-        # Get rid of Fusions that are below our thresholds
-        #if ( $fields[1] eq 'DelPositive' || $fields[0] eq 'MET-MET.M13M15' ) {
-            #next if $fields[2] < 1000;
-        #} else {
-            #next if $fields[2] < 25;
-        #}
 
         # Unifying the fusion threshold for both inter and intra-genic fusions now.
         next if $fields[2] < $read_count;
@@ -283,7 +282,10 @@ sub proc_cnv {
     my %results;
     my ($gender, $cellularity, $mapd);
 
-    open(my $vcf_data, '-|', "ocp_cnv_report.pl $$vcf_file");
+    my $cmd; 
+    ($nocall) ? ($cmd = qq(ocp_cnv_report.pl -N $$vcf_file)) : ($cmd = qq(ocp_cnv_report.pl $$vcf_file));
+    #open(my $vcf_data, '-|', "ocp_cnv_report.pl $$vcf_file");
+    open(my $vcf_data, '-|', $cmd);
     while (<$vcf_data>) {
         if (/^:::/) {
             ($gender, $cellularity, $mapd) = $_ =~ /.*?Gender: (\w+), Cellularity: (.*?), MAPD: (\d\.\d+)\) :::$/;
