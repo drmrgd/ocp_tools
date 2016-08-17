@@ -15,7 +15,7 @@ use Data::Dump;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v2.0.0_022916";
+my $version = "v2.1.0_081716";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -26,11 +26,12 @@ USAGE: $scriptname [options] <VCF_file(s)>
     Filter Options
     -n, --novel       Print non-HS CNVs (Default = OFF)
     -c, --copies      Only print CNVs with at least this copy number 
-    -g, --gene        Print out results for this gene only. Can also input a list of comma separated gene names to 
-                      output the results for each.
+    -g, --gene        Print out results for this gene only. Can also input a list of comma separated gene names to search 
     -t, --tiles       Only print out results for CNVs with at least this many tiles.
     -a, --annot       Only print CNVs with Oncomine Annotations.
+    -N, --NOCALL      Do not output NOCALL results (Default: OFF)
 
+    Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
     -v, --version     Version information
     -h, --help        Print this help information
@@ -44,6 +45,7 @@ my $threshold;
 my $geneid;
 my $tiles;
 my $annot;
+my $nocall;
 
 GetOptions( "novel|n"       => \$novel,
             "copies|c=i"    => \$threshold,
@@ -51,6 +53,7 @@ GetOptions( "novel|n"       => \$novel,
             "tiles|t=i"     => \$tiles,
             "annot|a"       => \$annot,
             "output|o=s"    => \$outfile,
+            "NOCALL|N"      => \$nocall,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -119,8 +122,16 @@ for my $input_file (@vcfs) {
             $sample_name = $data[-1];
             next;
         }
-
         next unless $data[4] eq '<CNV>';
+
+        my $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
+
+        # Let's handle NOCALLs for MATCHBox compatibility (prefer to filter on my own though).
+        if ($nocall && $data[6] eq 'NOCALL') {
+            ${$cnv_data{$sample_id}->{'NONE'}} = '';
+            next;
+        }
+
         my $varid = join( ':', @data[0..3] );
         
         # Kludgy, but need to deal with hotspots (HS) field; not like others!
@@ -131,7 +142,7 @@ for my $input_file (@vcfs) {
         my ($cn) = $data[9] =~ /:([^:]+)$/;
         push( @format, "CN=$cn" );
 
-        %{$cnv_data{join( ':', $sample_name, $gender, $mapd, $cellularity )}->{$varid}} = map { split /=/ } @format;
+        %{$cnv_data{$sample_id}->{$varid}} = map { split /=/ } @format;
     }
     if (DEBUG) {
         print "="x40, "  DEBUG  ", "="x40, "\n";
@@ -158,6 +169,7 @@ for my $sample ( keys %cnv_data ) {
     printf $format, @header;
 
     for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$cnv_data{$sample}} ) {
+        last if $cnv eq 'NONE';
         # Seems to be a bug in the same the CI are reported for deletions.  Solution correctly reports the value
         # in the VCF, but it's not so informative.  This will give a better set of data.
         my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/; 
