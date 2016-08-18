@@ -23,10 +23,15 @@ use Data::Dump;
 #print colored("*" x 50, 'bold yellow on_black');
 #print "\n\n";
 
-my $experimental = 1;
+my $experimental = 0;
+if ($experimental) {
+    print "\n";
+    print colored("*****  EXPERIMENTAL MODE ON!  *****", 'bold red on_white');
+    print "\n";
+}
 
 my $scriptname = basename($0);
-my $version = "v4.3.1_081716";
+my $version = "v4.4.0_081816";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
