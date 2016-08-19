@@ -23,15 +23,8 @@ use Data::Dump;
 #print colored("*" x 50, 'bold yellow on_black');
 #print "\n\n";
 
-my $experimental = 0;
-if ($experimental) {
-    print "\n";
-    print colored("*****  EXPERIMENTAL MODE ON!  *****", 'bold red on_white');
-    print "\n";
-}
-
 my $scriptname = basename($0);
-my $version = "v4.4.0_081816";
+my $version = "v4.4.1_081816";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -57,8 +50,8 @@ my $ver_info;
 my $outfile;
 my $freq_cutoff = 5;
 my $cn_cutoff = 4; # if set to 4, will use 5% CI.  Else will use CN as the threshold.  No need to specify.
-my $cn_upper_cutoff = 4; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
-my $cn_lower_cutoff = 1; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
+my $cn_upper_cutoff; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
+my $cn_lower_cutoff; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
 my $read_count = 100;
 my $raw_output;
 my $ocp;
@@ -122,6 +115,8 @@ my @required_programs = qw( vcfExtractor.pl ocp_cnv_report.pl ocp_control_summar
 for my $prog (@required_programs) {
     die "ERROR: '$prog' is required, but not found in your path!\n" unless qx(which $prog);
 }
+
+warn "NOTE: Using old CN method, which will be fully replaced with 5% and 95% confidence interval analysis soon!\n" unless ($cn_upper_cutoff && $cn_lower_cutoff);
 
 ########------------------------------ END ARG Parsing ---------------------------------#########
 my $vcf_file = shift;
@@ -303,7 +298,7 @@ sub proc_cnv {
             # XXX: 
             #     Set CNV cutoff here with either 5% CI val and threshold or CN val and threshold
             #     Try to setup reporting of both amplifications and deletions (95% CI < 1).
-            if ($experimental) {
+            if ($cn_upper_cutoff && $cn_lower_cutoff) {
                 if ($ci_05 >= $cn_upper_cutoff || $ci_95 <= $cn_lower_cutoff) {
                     $results{$fields[1]} = [@fields[0,5,8,10,9]];
                 }
