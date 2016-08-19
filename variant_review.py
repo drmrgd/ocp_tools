@@ -11,7 +11,7 @@ import fnmatch
 from time import sleep
 from pprint import pprint
 
-version = '1.4.1_071316'
+version = '1.5.0_081916'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -178,7 +178,8 @@ def gen_moi_report(msn,vcf):
     filename = msn + '_MATCH_MOI_Report.txt'
 
     print "Generating a MATCH MOI Report for {}...".format(msn),
-    p=subprocess.Popen(['match_moi_report.pl', '-o', filename, vcf], stdout=subprocess.PIPE)
+    # p=subprocess.Popen(['match_moi_report.pl', '-o', filename, vcf], stdout=subprocess.PIPE)
+    p=subprocess.Popen(['match_moi_report.pl', '--cu', '4', '--cl', '1', '-o', filename, vcf], stdout=subprocess.PIPE)
     result,error = p.communicate()
     print "Done!\n"
     print result.decode('ascii')
