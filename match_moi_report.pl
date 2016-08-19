@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.4.1_081816";
+my $version = "v4.5.0_081816";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -431,14 +431,17 @@ sub gen_report {
 
     print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
     print_msg(@formatted_mapd);
-    my $cnv_param_string; # Want to change output to indicate if we're using 5% CI or CN for the threshold.
-    ($cn_cutoff == 4) ? ($cnv_param_string = ", 5% CI >=" ) : ($cnv_param_string = ", CN >=");
-    print_msg( "$cnv_param_string $cn_cutoff) :::\n", "ansi3");
+    if ($cn_upper_cutoff) {
+        print_msg( ", 5% CI >= $cn_upper_cutoff, 95% CI <= $cn_lower_cutoff) :::\n", "ansi3");
+    } else {
+        my $cnv_param_string; # Want to change output to indicate if we're using 5% CI or CN for the threshold.
+        ($cn_cutoff == 4) ? ($cnv_param_string = ", 5% CI >=" ) : ($cnv_param_string = ", CN >=");
+        print_msg( "$cnv_param_string $cn_cutoff) :::\n", "ansi3");
+    }
 
     my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
     print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
-    # XXX
     if ( %$cnv_data ) {
         for my $cnv ( sort{ versioncmp( $$cnv_data{$a}->[0], $$cnv_data{$b}->[0] ) } keys %$cnv_data ) {
             #print_msg(sprintf($cnv_format, $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
