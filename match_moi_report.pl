@@ -116,7 +116,8 @@ for my $prog (@required_programs) {
     die "ERROR: '$prog' is required, but not found in your path!\n" unless qx(which $prog);
 }
 
-warn "NOTE: Using old CN method, which will be fully replaced with 5% and 95% confidence interval analysis soon!\n" unless ($cn_upper_cutoff && $cn_lower_cutoff);
+#warn "NOTE: Using old CN method, which will be fully replaced with 5% and 95% confidence interval analysis soon!\n" unless ($cn_upper_cutoff && $cn_lower_cutoff);
+print "NOTE: Using old CN method, which will be fully replaced with 5% and 95% confidence interval analysis soon!\n" unless ($cn_upper_cutoff && $cn_lower_cutoff);
 
 ########------------------------------ END ARG Parsing ---------------------------------#########
 my $vcf_file = shift;
