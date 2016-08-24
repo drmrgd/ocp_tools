@@ -10,5 +10,6 @@ most important being Thermo Fisher's VCF converter script. Current set of script
    * **match_moi_report.pl**:       Run variant rules to generate a report of NCI-MATCH MOIs and aMOIs for a VCF file.  
    * **plotCNV.R**:                 Thermo Fisher R script to generate a plot of CNV results for an OCP panel.
    * **variant_review.py**:         Python wrapper script to generate a variant review analysis directory starting with a DNA and an RNA BAM file.
+   * **match_control_report.pl**:   Input one or more VCF files from a MATCH control run and output a report.
    
 See the help documentation for each (`<program_name> --help`) for more detailed information about each. 
