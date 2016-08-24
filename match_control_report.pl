@@ -15,7 +15,7 @@ use Term::ANSIColor;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.0.0_082316";
+my $version = "v1.1.0_082416";
 my $description = <<"EOT";
 Generate a summary MATCH control report.  Need to input a list of VCF files and the version of the MATCH control used.  By
 default we'll use version 2.  Also, can output as a pretty printed report, or can output as a CSV for importation into 
@@ -183,7 +183,7 @@ sub generate_report {
 
     my @output_strings;
     my $sample_width = get_width([keys %$data]);
-    my @header = qw(Sample Site Type Gene Position Ref Alt VAF/CN Cov/Reads Call);
+    my @header = qw(Sample Site VarID Type Gene Position Ref Alt VAF_CN Cov_Reads Call);
     push(@output_strings, format_report_string(\$format, $sample_width, \@header));
 
     for my $sample ( sort{versioncmp($a, $b)} keys %$data ) {
@@ -191,18 +191,18 @@ sub generate_report {
         for my $variant (sort{ $$data{$sample}->{$b}[0] cmp $$data{$sample}->{$a}[0] } keys $$data{$sample}) {
             my $type = $$data{$sample}->{$variant}[0];
             my @wanted_indices = @{$want_fields{$type}};
-            my @var_data = ($sample, $site, @{$$data{$sample}->{$variant}}[@wanted_indices]);
+            my @var_data = ($sample, $site, $variant, @{$$data{$sample}->{$variant}}[@wanted_indices]);
 
             if ($type eq 'Fusion') {
-                splice(@var_data, 4, 0, '---','---');
-                splice(@var_data, 7, 0, '---');
-            }
-            elsif ($type eq 'CNV') {
-                splice(@var_data, 5, 0, '---', '---');
+                splice(@var_data, 5, 0, '---','---');
                 splice(@var_data, 8, 0, '---');
             }
+            elsif ($type eq 'CNV') {
+                splice(@var_data, 6, 0, '---', '---');
+                splice(@var_data, 9, 0, '---');
+            }
             # Handle negative results.
-            map {$_ = '0'} @var_data[7,8] if $var_data[9] eq 'NEG';
+            map {$_ = '0'} @var_data[8,9] if $var_data[9] eq 'NEG';
             push(@output_strings, format_report_string(\$format, $sample_width, \@var_data));
         }
     }
@@ -264,7 +264,7 @@ sub get_width {
 
 sub format_report_string {
     my ($format, $width, $data) = @_;
-    my $pp_format = "%-${width}s %-5s %-8s %-10s %-20s %-7s %-20s %-8s %-11s %-6s";
+    my $pp_format = "%-${width}s %-5s %-30s %-8s %-10s %-20s %-7s %-20s %-8s %-11s %-6s";
     ($$format eq 'pp') ? return sprintf($pp_format, @$data) : return join(',', @$data);
 }
 
