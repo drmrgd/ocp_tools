@@ -15,7 +15,7 @@ use Term::ANSIColor;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.1.0_082416";
+my $version = "v1.2.0_082416";
 my $description = <<"EOT";
 Generate a summary MATCH control report.  Need to input a list of VCF files and the version of the MATCH control used.  By
 default we'll use version 2.  Also, can output as a pretty printed report, or can output as a CSV for importation into 
@@ -183,7 +183,7 @@ sub generate_report {
 
     my @output_strings;
     my $sample_width = get_width([keys %$data]);
-    my @header = qw(Sample Site VarID Type Gene Position Ref Alt VAF_CN Cov_Reads Call);
+    my @header = qw(Sample Site VarID Type Gene Position Ref Alt VAF_CN Cov_Reads Measurement Call);
     push(@output_strings, format_report_string(\$format, $sample_width, \@header));
 
     for my $sample ( sort{versioncmp($a, $b)} keys %$data ) {
@@ -202,7 +202,8 @@ sub generate_report {
                 splice(@var_data, 9, 0, '---');
             }
             # Handle negative results.
-            map {$_ = '0'} @var_data[8,9] if $var_data[9] eq 'NEG';
+            map {$_ = '0'} @var_data[8,9] if $var_data[10] eq 'NEG';
+            ($var_data[3] =~ /[SC]NV/) ? splice(@var_data,10,0,$var_data[8]) : splice(@var_data,10,0,$var_data[9]);
             push(@output_strings, format_report_string(\$format, $sample_width, \@var_data));
         }
     }
@@ -264,7 +265,7 @@ sub get_width {
 
 sub format_report_string {
     my ($format, $width, $data) = @_;
-    my $pp_format = "%-${width}s %-5s %-30s %-8s %-10s %-20s %-7s %-20s %-8s %-11s %-6s";
+    my $pp_format = "%-${width}s %-5s %-30s %-8s %-10s %-20s %-7s %-20s %-8s %-11s %-11s %-6s";
     ($$format eq 'pp') ? return sprintf($pp_format, @$data) : return join(',', @$data);
 }
 
