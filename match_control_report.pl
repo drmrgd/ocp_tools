@@ -15,7 +15,7 @@ use Term::ANSIColor;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.2.0_082416";
+my $version = "v1.3.0_082416";
 my $description = <<"EOT";
 Generate a summary MATCH control report.  Need to input a list of VCF files and the version of the MATCH control used.  By
 default we'll use version 2.  Also, can output as a pretty printed report, or can output as a CSV for importation into 
@@ -156,7 +156,7 @@ sub check_results {
             my @var_string;
             if ($num_elems == 4) {
                 my ($pos, $ref, $alt, $gene) = $control =~ /(^chr.*):(\w+):(\w+):(.*?)$/;
-                @var_string = ('SNV', $pos, $ref, $alt, 'vaf', 'totcov', 'refcov', 'altcov', 'varid', $gene);
+                @var_string = ('SNV_Indel', $pos, $ref, $alt, 'vaf', 'totcov', 'refcov', 'altcov', 'varid', $gene);
                 push(@var_string, ('xxx')x7);
             }
             elsif ($num_elems == 1) {
@@ -176,7 +176,7 @@ sub check_results {
 sub generate_report {
     my ($data,$format) = @_;
     my %want_fields = (
-        'SNV'    => [qw(0 9 1 2 3 4 5 17)],
+        'SNV_Indel'    => [qw(0 9 1 2 3 4 5 17)],
         'CNV'    => [qw(0 1 2 5 8)],
         'Fusion' => [qw(0 4 1 3 6)],
     );
@@ -227,7 +227,7 @@ sub proc_vcf {
     my %results;
 
     # Don't output these calls since we want them filtered anyway.
-    my @filtered_variants;
+    my @filtered_variants = qw( chr17:7579473:G:C:TP53 );
     push(@filtered_variants, 'EML4-ALK.E6bA20') if $lookup_table == 2;
     my $cmd = qq(match_moi_report.pl -n -r -R1000 -c7 $$vcf) ;
 
@@ -239,6 +239,7 @@ sub proc_vcf {
         my @data = split(/,/);
         my $varid; 
         if ($data[0] eq 'SNV') {
+            $data[0] = 'SNV_Indel';
             next if $data[7] < 25; # Routbort rule
             $varid = join(':', @data[1..3,9]);
         }
@@ -265,7 +266,8 @@ sub get_width {
 
 sub format_report_string {
     my ($format, $width, $data) = @_;
-    my $pp_format = "%-${width}s %-5s %-30s %-8s %-10s %-20s %-7s %-20s %-8s %-11s %-11s %-6s";
+    # Sample Site VarID Type Gene Position Ref Alt VAF_CN Cov_Reads Measurement Call
+    my $pp_format = "%-${width}s %-5s %-27s %-11s %-10s %-20s %-7s %-20s %-8s %-11s %-11s %-6s";
     ($$format eq 'pp') ? return sprintf($pp_format, @$data) : return join(',', @$data);
 }
 
