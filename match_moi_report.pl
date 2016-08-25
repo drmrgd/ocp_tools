@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.5.0_081816";
+my $version = "v4.6.0_082516";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -467,20 +467,27 @@ sub gen_report {
     delete $$fusion_data{'MAPPED_RNA'};
 
     my @read_count;
+    my $commified_reads = commify($tot_rna_reads);
     ($tot_rna_reads < 100000) ? 
-        (@read_count = ("**$tot_rna_reads**", 'bold red on_black')) : 
-        (@read_count = ($tot_rna_reads,'ansi3')); 
+        #(@read_count = ("**$tot_rna_reads**", 'bold red on_black')) : 
+        #(@read_count = ($tot_rna_reads,'ansi3')); 
+        (@read_count = ("**$commified_reads**", 'bold red on_black')) : 
+        (@read_count = ($commified_reads,'ansi3')); 
 
     my @ipc_output;
+    $commified_reads = commify($ipc_reads);
     ($ipc_reads < 20000) ? 
-        (@ipc_output = ("**$ipc_reads**", 'bold red on_black')) : 
-        (@ipc_output = ($ipc_reads, 'ansi3'));
+        #(@ipc_output = ("**$ipc_reads**", 'bold red on_black')) : 
+        #(@ipc_output = ($ipc_reads, 'ansi3'));
+        (@ipc_output = ("**$commified_reads**", 'bold red on_black')) : 
+        (@ipc_output = ($commified_reads, 'ansi3'));
 
     print_msg("::: MATCH Reportable Fusions (Total Reads: ",'ansi3');
     print_msg(@read_count);
-    print_msg(', Sum Expression Control Reads: ','ansi3');
+    print_msg('; Sum Expression Control Reads: ','ansi3');
     print_msg(@ipc_output);
-    print_msg( ", Threshold: $read_count) :::\n",'ansi3');
+    $read_count = commify($read_count);
+    print_msg( "; Threshold: $read_count) :::\n",'ansi3');
 
     ($w1) = field_width( $fusion_data, 'fusion' );
     my $fusion_format = "%-${w1}s %-12s %-12s %-15s %-15s\n";
@@ -495,4 +502,12 @@ sub gen_report {
         print_msg(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
     }
     return;
+}
+
+sub commify {
+    my $number = shift;
+    my ($integer, $decimal) = split(/\./, $number);
+    my @groups = unpack '(A3)*', reverse $integer;
+    my $commified_int = join(',', map {scalar reverse $_} reverse @groups);
+    ($decimal) ? return "$commified_int.$decimal" : return $commified_int;
 }
