@@ -10,6 +10,7 @@ use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
 use Sort::Versions;
 use JSON -support_by_pp;
+use Parallel::ForkManager;
 use Data::Dump;
 
 use constant DEBUG => 0;
@@ -33,6 +34,7 @@ USAGE: $scriptname [options] <VCF_file(s)>
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
+    -r, --raw         Output raw CSV data, rather than pretty printed report.
     -v, --version     Version information
     -h, --help        Print this help information
 EOT
