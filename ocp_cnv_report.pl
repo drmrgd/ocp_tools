@@ -16,7 +16,7 @@ use Data::Dump;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v2.1.0_081716";
+my $version = "v2.2.0_082916";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -48,6 +48,7 @@ my $geneid;
 my $tiles;
 my $annot;
 my $nocall;
+my $raw_output;
 
 GetOptions( "novel|n"       => \$novel,
             "copies|c=i"    => \$threshold,
@@ -57,6 +58,7 @@ GetOptions( "novel|n"       => \$novel,
             "output|o=s"    => \$outfile,
             "NOCALL|N"      => \$nocall,
             "version|v"     => \$ver_info,
+            "raw|r"         => \$raw_output,
             "help|h"        => \$help )
         or die $usage;
 
@@ -90,71 +92,40 @@ if ( $outfile ) {
 
 #########------------------------------ END ARG Parsing ---------------------------------#########
 my %cnv_data;
+my $cnv_data;
 my @vcfs = @ARGV;
+
+my $pm = new Parallel::ForkManager(48);
+$pm->run_on_finish(
+    sub {
+        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data_structure_reference) = @_;
+        my $vcf = $data_structure_reference->{input};
+        my $name = $data_structure_reference->{sample};
+        $name //= basename($vcf);
+        #$cnv_data{$name} = $data_structure_reference->{result};
+        $cnv_data = $data_structure_reference->{result};
+    }
+);
+
 for my $input_file (@vcfs) {
-    my ($sample_name, $gender, $mapd, $cellularity);
-
-    open( my $vcf_fh, "<", $input_file );
-    while (<$vcf_fh>) {
-        if ( /^##/ ) {
-            if ( $_ =~ /sampleGender=(\w+)/ ) {
-                $gender = $1;
-                next;
-            }
-            # Need to add to accomodate the new CNV plugin; may not have the same field as the normal IR data.
-            if ($_ =~ /AssumedGender=([mf])/) {
-                ($1 eq 'm') ? ($gender='Male') : ($gender='Female');
-                next;
-            }
-            elsif ( $_ =~ /mapd=(\d\.\d+)/ ) {
-                $mapd = $1;
-                next;
-            }
-            elsif ( $_ =~ /CellularityAsAFractionBetween0-1=(.*)$/ ) {
-                $cellularity = $1;
-                next;
-            }
-            else {
-                next;
-            }
-        } 
-
-        my @data = split;
-        if ( $data[0] =~ /^#/ ) {
-            $sample_name = $data[-1];
-            next;
+    $pm->start and next;
+    my ($return_data, $sample_name, $cellularity, $gender, $mapd)  = proc_vcf(\$input_file);
+    $pm->finish(0, 
+        { result      => $return_data, 
+          sample      => $$sample_name, 
+          cellularity => $cellularity, 
+          gender      => $gender, 
+          mapd        => $mapd,
+          input       => $input_file, 
         }
-        next unless $data[4] eq '<CNV>';
-
-        my $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
-
-        # Let's handle NOCALLs for MATCHBox compatibility (prefer to filter on my own though).
-        if ($nocall && $data[6] eq 'NOCALL') {
-            ${$cnv_data{$sample_id}->{'NONE'}} = '';
-            next;
-        }
-
-        my $varid = join( ':', @data[0..3] );
-        
-        # Kludgy, but need to deal with hotspots (HS) field; not like others!
-        $data[7] =~ s/HS/HS=Yes/;
-        $data[7] =~ s/SD;/SD=NA;/; # sometimes data in this field and sometimes not.  
-
-        my @format = split( /;/, $data[7] );
-        my ($cn) = $data[9] =~ /:([^:]+)$/;
-        push( @format, "CN=$cn" );
-
-        %{$cnv_data{$sample_id}->{$varid}} = map { split /=/ } @format;
-    }
-    if (DEBUG) {
-        print "="x40, "  DEBUG  ", "="x40, "\n";
-        print "\tSample Name:  $sample_name\n";
-        print "\tCellularity:  $cellularity\n";
-        print "\tGender:       $gender\n";
-        print "\tMAPD:         $mapd\n";
-        print "="x89, "\n";
-    }
+     );
 }
+$pm->wait_all_children;
+
+#dd \%cnv_data;
+dd $cnv_data;
+exit;
+
 
 # Set up for printing output
 my @outfields = qw( END LEN NUMTILES RAW_CN REF_CN CN HS FUNC );
@@ -219,4 +190,65 @@ for my $sample ( keys %cnv_data ) {
         print "\t\t>>> No CNVs found with the applied filters! <<<\n";
     }
     print "\n";
+}
+
+sub proc_vcf {
+    my $vcf = shift;
+    my ($gender, $mapd, $cellularity, $sample_name);
+    my %results;
+
+    open( my $vcf_fh, "<", $$vcf);
+    while (<$vcf_fh>) {
+        if ( /^##/ ) {
+            if ( $_ =~ /sampleGender=(\w+)/ ) {
+                $gender = $1 and next;
+            }
+            # Need to add to accomodate the new CNV plugin; may not have the same field as the normal IR data.
+            if ($_ =~ /AssumedGender=([mf])/) {
+                ($1 eq 'm') ? ($gender='Male') : ($gender='Female');
+                next;
+            }
+            elsif ( $_ =~ /mapd=(\d\.\d+)/ ) {
+                $mapd = $1 and next;
+            }
+            elsif ( $_ =~ /CellularityAsAFractionBetween0-1=(.*)$/ ) {
+                $cellularity = $1 and next;
+            }
+        } 
+
+        my @data = split;
+        if ( $data[0] =~ /^#/ ) {
+            $sample_name = $data[-1] and next;
+        }
+        next unless $data[4] eq '<CNV>';
+
+        my $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
+
+        # Let's handle NOCALLs for MATCHBox compatibility (prefer to filter on my own though).
+        if ($nocall && $data[6] eq 'NOCALL') {
+            ${$cnv_data{$sample_id}->{'NONE'}} = '';
+            next;
+        }
+
+        my $varid = join( ':', @data[0..3] );
+        
+        # Kludgy, but need to deal with hotspots (HS) field; not like others!
+        $data[7] =~ s/HS/HS=Yes/;
+        $data[7] =~ s/SD;/SD=NA;/; # sometimes data in this field and sometimes not.  
+
+        my @format = split( /;/, $data[7] );
+        my ($cn) = $data[9] =~ /:([^:]+)$/;
+        push( @format, "CN=$cn" );
+
+        %{$results{$sample_id}->{$varid}} = map { split /=/ } @format;
+    }
+    if (DEBUG) {
+        print "="x40, "  DEBUG  ", "="x40, "\n";
+        print "\tSample Name:  $sample_name\n";
+        print "\tCellularity:  $cellularity\n";
+        print "\tGender:       $gender\n";
+        print "\tMAPD:         $mapd\n";
+        print "="x89, "\n";
+    }
+    return \%results, \$sample_name, \$cellularity, \$gender, \$mapd;
 }
