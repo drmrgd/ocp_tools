@@ -5,10 +5,11 @@ import re
 import subprocess
 import argparse
 from natsort import natsorted
-from pprint import pprint
+from pprint import pprint as pp
 from collections import defaultdict
+from multiprocessing.pool import ThreadPool
 
-version = '1.3.0_022916'
+version = '1.4.0_022916'
 
 def get_opts():
     parser = argparse.ArgumentParser(
@@ -23,7 +24,7 @@ def get_opts():
     parser.add_argument('vcf_files', nargs='+', metavar='vcf_files', help='VCF files to process')
     parser.add_argument('-n', '--nonmatch', action='store_true', 
             help='VCF files are not from MATCHBox and do not contain PSN / MSN information')
-    parser.add_argument('-cn', '--copy-number', metavar='INT', help='Only print results if CN is greater that this value')
+    parser.add_argument('-cn', '--copy-number', default=0, metavar='INT', help='Only print results if CN is greater that this value')
     parser.add_argument('-csv', action='store_true', 
             help='Format results as a CSV file (default is whitespace formatted, pretty print file')
     parser.add_argument('-tsv', action='store_true', 
@@ -34,14 +35,15 @@ def get_opts():
 
 def read_file(vcf,gene,cn):
     cmd = 'ocp_cnv_report.pl -g {} -c {} {}'.format(gene, str(cn), vcf)
+
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     result,err = p.communicate()
     try:
-        cnv_data = parse_raw_data(result)
+        sample_name,cnv_data = parse_raw_data(result)
     except:
         print "WARNING: error processing file {}. Skipping this VCF file.".format(vcf)
         return
-    return cnv_data
+    return sample_name,cnv_data
 
 def convert_type(i):
     data_types = [int, float, str]
@@ -75,26 +77,31 @@ def parse_raw_data(raw_data):
     for i in range(9,14,1):
         if type(clist[i]) != str:
             clist[i] = format(clist[i], '.1f')
-    return clist
+    return sample_name,clist
 
 def output_data(cnv_data,delimiter,nonmatch):
     template = ''
 
     if delimiter:
-        template = ('{}'+delimiter)*8 + '{}'
+        # template = ('{}'+delimiter)*8 + '{}'
+        template = ('{}'+delimiter)*7 + '{}'
     else:
-        template = '{:<11} {:<10} {:<10} {:<8} {:<10} {:<8} {:<7} {:<7} {:<3}'
+        # template = '{:<11} {:<10} {:<10} {:<8} {:<10} {:<8} {:<7} {:<7} {:<3}'
+        template = '{:<10} {:<10} {:<8} {:<10} {:<8} {:<7} {:<7} {:<3}'
 
     if nonmatch:
-        header = ('Patient', 'MSN', 'Gender', 'MAPD', 'Gene', 'Chr', 'CI_05', 'CI_95', 'CN')
+        header = ('Sample', 'Gender', 'MAPD', 'Gene', 'Chr', 'CI_05', 'CI_95', 'CN')
     else:
-        header = ('Filename', 'Sample', 'Gender', 'MAPD', 'Gene', 'Chr', 'CI_05', 'CI_95', 'CN')
+        header = ('MSN', 'Gender', 'MAPD', 'Gene', 'Chr', 'CI_05', 'CI_95', 'CN')
     print template.format(*header)
 
-    desired_elements = [0,1,2,4,3,11,12,13]
+    desired_elements = [1,2,4,3,11,12,13]
     for patient in natsorted(cnv_data):
         print template.format(patient,*[cnv_data[patient][i] for i in desired_elements])
     return
+
+def arg_star(args):
+    return read_file(*args)
 
 def main():
     args = get_opts()
@@ -109,14 +116,30 @@ def main():
     elif args.tsv:
         delimiter = '\t'
 
-    results = defaultdict(list)
+    # results = defaultdict(list)
+    pool = ThreadPool(48)
+    task_list = [(x,gene_lookup,cn_threshold) for x in args.vcf_files]
+    results = {sample : data for sample,data in pool.imap_unordered(arg_star,task_list)}
+    # for a,b in results:
+        # print "results for {}:".format(a)
+        # pp(b)
+    # sys.exit()
+    # results = {file_elems[0]: a for sample,a in pool.imap_unordered(arg_star, task_list)}
+    pp(dict(results))
+    sys.exit()
+
     for vcf in args.vcf_files:
         if args.nonmatch:
-            (psn,msn,ver) = os.path.basename(vcf).split('_')
-            ver=ver.rstrip('.vcf')
-            results[psn] = read_file(vcf, gene_lookup, cn_threshold)
-        else:
             results[vcf.rstrip('.vcf')] = read_file(vcf, gene_lookup, cn_threshold)
+        else:
+            file_elems = os.path.basename(vcf).split('_')
+            # if file_elems[0] == file_elems[1]:
+                #no PSN and we have the double MSN naming
+                # (msn,ver) = file_elems[1,2]
+            # else:
+                # (psn,msn,ver) = os.path.basename(vcf).split('_')
+                # ver=ver.rstrip('.vcf')
+            results[file_elems[0]] = read_file(vcf, gene_lookup, cn_threshold)
 
     output_data(results, delimiter, args.nonmatch)
     return
