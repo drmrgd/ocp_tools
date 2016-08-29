@@ -16,7 +16,7 @@ use Data::Dump;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v2.2.0_082916";
+my $version = "v2.3.0_082916";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -92,7 +92,6 @@ if ( $outfile ) {
 
 #########------------------------------ END ARG Parsing ---------------------------------#########
 my %cnv_data;
-my $cnv_data;
 my @vcfs = @ARGV;
 
 my $pm = new Parallel::ForkManager(48);
@@ -100,32 +99,25 @@ $pm->run_on_finish(
     sub {
         my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data_structure_reference) = @_;
         my $vcf = $data_structure_reference->{input};
-        my $name = $data_structure_reference->{sample};
+        my $name = $data_structure_reference->{id};
         $name //= basename($vcf);
-        #$cnv_data{$name} = $data_structure_reference->{result};
-        $cnv_data = $data_structure_reference->{result};
+        $cnv_data{$$name} = $data_structure_reference->{result};
     }
 );
 
 for my $input_file (@vcfs) {
     $pm->start and next;
-    my ($return_data, $sample_name, $cellularity, $gender, $mapd)  = proc_vcf(\$input_file);
+    my ($return_data, $sample_id)  = proc_vcf(\$input_file);
+
     $pm->finish(0, 
-        { result      => $return_data, 
-          sample      => $$sample_name, 
-          cellularity => $cellularity, 
-          gender      => $gender, 
-          mapd        => $mapd,
-          input       => $input_file, 
+        { 
+          result  => $return_data, 
+          input   => $input_file, 
+          id      => $sample_id,
         }
      );
 }
 $pm->wait_all_children;
-
-#dd \%cnv_data;
-dd $cnv_data;
-exit;
-
 
 # Set up for printing output
 my @outfields = qw( END LEN NUMTILES RAW_CN REF_CN CN HS FUNC );
@@ -194,7 +186,7 @@ for my $sample ( keys %cnv_data ) {
 
 sub proc_vcf {
     my $vcf = shift;
-    my ($gender, $mapd, $cellularity, $sample_name);
+    my ($sample_id, $gender, $mapd, $cellularity, $sample_name);
     my %results;
 
     open( my $vcf_fh, "<", $$vcf);
@@ -222,7 +214,8 @@ sub proc_vcf {
         }
         next unless $data[4] eq '<CNV>';
 
-        my $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
+        #my $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
+        $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
 
         # Let's handle NOCALLs for MATCHBox compatibility (prefer to filter on my own though).
         if ($nocall && $data[6] eq 'NOCALL') {
@@ -240,7 +233,9 @@ sub proc_vcf {
         my ($cn) = $data[9] =~ /:([^:]+)$/;
         push( @format, "CN=$cn" );
 
-        %{$results{$sample_id}->{$varid}} = map { split /=/ } @format;
+        #%{$results{$sample_id}->{$varid}} = map { split /=/ } @format;
+        # TODO
+        %{$results{$varid}} = map { split /=/ } @format;
     }
     if (DEBUG) {
         print "="x40, "  DEBUG  ", "="x40, "\n";
@@ -250,5 +245,6 @@ sub proc_vcf {
         print "\tMAPD:         $mapd\n";
         print "="x89, "\n";
     }
-    return \%results, \$sample_name, \$cellularity, \$gender, \$mapd;
+    #return \%results, \$sample_name, \$cellularity, \$gender, \$mapd;
+    return \%results, \$sample_id;
 }
