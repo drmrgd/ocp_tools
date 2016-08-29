@@ -9,7 +9,7 @@ from pprint import pprint as pp
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 
-version = '1.4.0_022916'
+version = '2.0.0_082916'
 
 def get_opts():
     parser = argparse.ArgumentParser(
@@ -20,22 +20,18 @@ def get_opts():
         ''',
         version = '%(prog)s - ' + version,
         )
-    parser.add_argument('gene', metavar='gene_name', help='Gene name to query. NOTE: name is case sensitive')
     parser.add_argument('vcf_files', nargs='+', metavar='vcf_files', help='VCF files to process')
-    parser.add_argument('-n', '--nonmatch', action='store_true', 
-            help='VCF files are not from MATCHBox and do not contain PSN / MSN information')
+    parser.add_argument('-g', '--gene', metavar='gene_name', required=True,
+            help='Gene name to query. Can input a comma separated list of genes to query.')
     parser.add_argument('-cn', '--copy-number', default=0, metavar='INT', help='Only print results if CN is greater that this value')
     parser.add_argument('-csv', action='store_true', 
             help='Format results as a CSV file (default is whitespace formatted, pretty print file')
-    parser.add_argument('-tsv', action='store_true', 
-            help='Format results as a TSV file (default is whitespace formatted, pretty print file')
     args = parser.parse_args()
 
     return args
 
 def read_file(vcf,gene,cn):
     cmd = 'ocp_cnv_report.pl -g {} -c {} {}'.format(gene, str(cn), vcf)
-
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     result,err = p.communicate()
     try:
@@ -56,56 +52,65 @@ def convert_type(i):
 def parse_raw_data(raw_data):
     lines = raw_data.split('\n')
     data = []
+    result = []
 
     for line in lines:
         if line.startswith('chr'):
-            elems = line.split()
-            data.extend(line.split())
+            data.append(line.split())
         elif line.startswith(':::'):
             match = re.match('.*Data For (\w+).*Gender: (Unknown|Male|Female).*MAPD: (.*)\) :::$',line)
             sample_name = match.group(1)
             gender = match.group(2)
             mapd = match.group(3)
-            data.extend([sample_name,gender,mapd])
+            sample_id = ':'.join([sample_name,gender,mapd])
 
     # pad out with "NDs" if no match.
-    if len(data) < 4:
-        null_result = 'ND '*12
-        data.extend([x for x in null_result.split()])
+    for elem in data: 
+        if len(elem) < 4:
+            null_result = 'ND '*12
+            elem.extend([x for x in null_result.split()])
 
-    clist = [convert_type(x) for x in data]
-    for i in range(9,14,1):
-        if type(clist[i]) != str:
-            clist[i] = format(clist[i], '.1f')
-    return sample_name,clist
+        clist = [convert_type(x) for x in elem]
+        for i in range(6,11,1):
+            if type(clist[i]) != str:
+                clist[i] = format(clist[i], '.2f')
+        result.append(clist)
+    return sample_id,result
 
-def output_data(cnv_data,delimiter,nonmatch):
+def output_data(cnv_data,delimiter):
     template = ''
-
+    sample_width = get_width(cnv_data.keys())
     if delimiter:
-        # template = ('{}'+delimiter)*8 + '{}'
         template = ('{}'+delimiter)*7 + '{}'
     else:
-        # template = '{:<11} {:<10} {:<10} {:<8} {:<10} {:<8} {:<7} {:<7} {:<3}'
-        template = '{:<10} {:<10} {:<8} {:<10} {:<8} {:<7} {:<7} {:<3}'
+        template = '{:<{width}} {:<10} {:<8} {:<10} {:<8} {:<7} {:<7} {:<3}'
+    header = ('Sample', 'Gender', 'MAPD', 'Gene', 'Chr', 'CI_05', 'CI_95', 'CN')
+    print template.format(width=sample_width,*header)
 
-    if nonmatch:
-        header = ('Sample', 'Gender', 'MAPD', 'Gene', 'Chr', 'CI_05', 'CI_95', 'CN')
-    else:
-        header = ('MSN', 'Gender', 'MAPD', 'Gene', 'Chr', 'CI_05', 'CI_95', 'CN')
-    print template.format(*header)
-
-    desired_elements = [1,2,4,3,11,12,13]
+    desired_elements = [1,0,8,9,10]
     for patient in natsorted(cnv_data):
-        print template.format(patient,*[cnv_data[patient][i] for i in desired_elements])
+        sample,gender,mapd = patient.split(':')
+        for result in cnv_data[patient]:
+            output_data = [sample,gender,mapd]
+            output_data.extend([result[i] for i in desired_elements])
+            print template.format(width=sample_width, *output_data)
     return
 
 def arg_star(args):
     return read_file(*args)
 
+def get_width(data):
+    width = 0
+    samples = [x.split(':')[0] for x in data]
+    for sample in samples:
+        if len(sample) > width:
+            width = len(sample)
+    return int(width) + 4
+
 def main():
     args = get_opts()
     gene_lookup = args.gene
+        
     cn_threshold = 0
     if args.copy_number:
         cn_threshold = args.copy_number
@@ -113,35 +118,11 @@ def main():
     delimiter = None
     if args.csv:
         delimiter = ','
-    elif args.tsv:
-        delimiter = '\t'
 
-    # results = defaultdict(list)
     pool = ThreadPool(48)
     task_list = [(x,gene_lookup,cn_threshold) for x in args.vcf_files]
     results = {sample : data for sample,data in pool.imap_unordered(arg_star,task_list)}
-    # for a,b in results:
-        # print "results for {}:".format(a)
-        # pp(b)
-    # sys.exit()
-    # results = {file_elems[0]: a for sample,a in pool.imap_unordered(arg_star, task_list)}
-    pp(dict(results))
-    sys.exit()
-
-    for vcf in args.vcf_files:
-        if args.nonmatch:
-            results[vcf.rstrip('.vcf')] = read_file(vcf, gene_lookup, cn_threshold)
-        else:
-            file_elems = os.path.basename(vcf).split('_')
-            # if file_elems[0] == file_elems[1]:
-                #no PSN and we have the double MSN naming
-                # (msn,ver) = file_elems[1,2]
-            # else:
-                # (psn,msn,ver) = os.path.basename(vcf).split('_')
-                # ver=ver.rstrip('.vcf')
-            results[file_elems[0]] = read_file(vcf, gene_lookup, cn_threshold)
-
-    output_data(results, delimiter, args.nonmatch)
+    output_data(results, delimiter)
     return
 
 if __name__ == '__main__':
