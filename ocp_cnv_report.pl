@@ -13,7 +13,7 @@ use JSON -support_by_pp;
 use Parallel::ForkManager;
 use Data::Dump;
 
-use constant DEBUG => 0;
+use constant DEBUG => 1;
 
 my $scriptname = basename($0);
 my $version = "v2.3.0_082916";
@@ -25,12 +25,14 @@ EOT
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF_file(s)>
     Filter Options
-    -n, --novel       Print non-HS CNVs (Default = OFF)
-    -c, --copies      Only print CNVs with at least this copy number 
-    -g, --gene        Print out results for this gene only. Can also input a list of comma separated gene names to search 
-    -t, --tiles       Only print out results for CNVs with at least this many tiles.
-    -a, --annot       Only print CNVs with Oncomine Annotations.
-    -N, --NOCALL      Do not output NOCALL results (Default: OFF)
+    --cn  INT      Only report amplifications above this threshold (DEFAULT: CN >= 0)
+    --cu  INT      Upper bound for amplifications based on 5% CI (DEFAULT: 5% CI >= 4)
+    --cl  INT      Lower bound for deletions based on 95% CI (DEFAULT: 95% CI <= 1)
+    -n, --novel    Print non-HS CNVs (Default = OFF)
+    -g, --gene     Print out results for this gene only. Can also input a list of comma separated gene names to search 
+    -t, --tiles    Only print out results for CNVs with at least this many tiles.
+    -a, --annot    Only print CNVs with Oncomine Annotations.
+    -N, --NOCALL   Do not output NOCALL results (Default: OFF)
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
@@ -43,23 +45,27 @@ my $help;
 my $ver_info;
 my $outfile;
 my $novel;
-my $threshold;
+my $copy_number = 0;
+my $cu;
+my $cl;
 my $geneid;
 my $tiles;
 my $annot;
 my $nocall;
 my $raw_output;
 
-GetOptions( "novel|n"       => \$novel,
-            "copies|c=i"    => \$threshold,
-            "gene|g=s"      => \$geneid,
-            "tiles|t=i"     => \$tiles,
-            "annot|a"       => \$annot,
-            "output|o=s"    => \$outfile,
-            "NOCALL|N"      => \$nocall,
-            "version|v"     => \$ver_info,
-            "raw|r"         => \$raw_output,
-            "help|h"        => \$help )
+GetOptions( "novel|n"             => \$novel,
+            "copy-number|cn=f"    => \$copy_number,
+            "upper-copies|cu=f"   => \$cu,
+            "lower-copies|cl=f"   => \$cl,
+            "gene|g=s"            => \$geneid,
+            "tiles|t=i"           => \$tiles,
+            "annot|a"             => \$annot,
+            "output|o=s"          => \$outfile,
+            "NOCALL|N"            => \$nocall,
+            "version|v"           => \$ver_info,
+            "raw|r"               => \$raw_output,
+            "help|h"              => \$help )
         or die $usage;
 
 sub help {
@@ -74,6 +80,32 @@ sub version {
 
 help if $help;
 version if $ver_info;
+
+# We don't need both cn and cu or cl
+if ($cl or $cu) {
+    undef $copy_number;
+}
+my @genelist = split(/,/, $geneid) if $geneid;
+
+my %filters = (
+    'cn'    => $copy_number,
+    'cu'    => $cu,
+    'cl'    => $cl,
+    'gene'  => [@genelist],
+    'tiles' => $tiles,
+    'annot' => $annot,
+    'novel' => $novel,
+);
+
+if (DEBUG) {
+    print '='x35, '  DEBUG  ', '='x35, "\n";
+    print "Filters being employed\n";
+    while (my ($keys, $values) = each %filters) {
+        $values //= 'undef';
+        printf "\t%-7s => %s\n",$keys,$values;
+    }
+    print '='x79, "\n";
+}
 
 # Make sure enough args passed to script
 if ( scalar( @ARGV ) < 1 ) {
@@ -130,38 +162,33 @@ select $out_fh;
 for my $sample ( keys %cnv_data ) {
     my ($id, $gender, $mapd, $cell) = split( /:/, $sample );
     my $count;
-    print "::: CNVs Data For $id (Gender: $gender, Cellularity: $cell, MAPD: $mapd) :::\n";
+    print "::: CNV Data For $id (Gender: $gender, Cellularity: $cell, MAPD: $mapd) :::\n";
     printf $format, @header;
 
     for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$cnv_data{$sample}} ) {
+        my %mapped_cnv_data;
         last if $cnv eq 'NONE';
         # Seems to be a bug in the same the CI are reported for deletions.  Solution correctly reports the value
         # in the VCF, but it's not so informative.  This will give a better set of data.
         my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/; 
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
-        my ($end, $length, $numtiles, $raw_cn, $ref_cn, $cn, $hs, $func) = map { $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
-        $hs //= 'No';
+        #my ($end, $length, $numtiles, $raw_cn, $ref_cn, $cn, $hs, $func) = map { $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
 
-        # Filter data
-        next if ( ! $novel && ($gene eq '.' || $hs eq 'No') );
-        if ( $threshold ) {
-            next unless ( $cn >= $threshold );
-        }
-        if ( $tiles ) {
-            next unless ( $numtiles >= $tiles );
-        }
-        if ( $geneid ) {
-            my @genelist = split(/,/, $geneid);
-            # Allow for case insensitive searching...I'm too lazy for the shift key!
-            next unless ( grep { $gene eq uc($_) } @genelist );
-        }
+        %mapped_cnv_data = map{ $_ => $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
+        @mapped_cnv_data{qw(ci_05 ci_95)} = ($ci_5,$ci_95);
+        @mapped_cnv_data{qw(chr start gene undef)} = split(/:/, $cnv);
 
-        # Need to add this to fix null 5% and 95% CI values if they don't exist
-        $ci_5 //= 0;
-        $ci_95 //= 0;
+        #$hs //= 'No';
+        #$ci_5 //= 0;
+        #$ci_95 //= 0;
+        $mapped_cnv_data{HS} //= 'No';
+        $mapped_cnv_data{ci_05} //= 0;
+        $mapped_cnv_data{ci_95} //= 0;
 
         # Get OVAT Annot Data
         my ($gene_class, $variant_class);
+        my $func = $mapped_cnv_data{FUNC};
+        #if ( $mapped_cnv_data{$func} && $mapped_cnv_data{$func} =~ /oncomine/ ) {
         if ( $func && $func =~ /oncomine/ ) {
             my $json_annot = JSON->new->allow_singlequote->decode($func);
             my $parsed_annot = $$json_annot[0];
@@ -170,11 +197,83 @@ for my $sample ( keys %cnv_data ) {
         } else {
             $gene_class = $variant_class = '---';
         }
+        $mapped_cnv_data{GC} = $gene_class;
+        $mapped_cnv_data{VC} = $variant_class;
 
-        # Filter out non-oncomine CNVs
-        if ( $annot ) {
-            next unless $gene_class ne '---';
+        dd \%mapped_cnv_data;
+        exit;
+
+        my @return_data = filter_results(\%mapped_cnv_data, \%filters);
+
+        ## Filter non-hotspots and novel if we don't want them.
+        #next if ( ! $novel && ($gene eq '.' || $hs eq 'No') );
+        #if ( $geneid ) {
+            #my @genelist = split(/,/, $geneid);
+            #next unless ( grep { $gene eq uc($_) } @genelist );
+        #}
+
+        ## Filter out non-oncomine CNVs
+        #next if $annot and $gene_class eq '---';
+
+        #next unless $tiles and $numtiles >= $tiles;
+
+        #my @wanted_fields = qq($chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class);
+        #my @data;
+
+        #if ($cu and $cl) {
+            #if ($ci_5 >= $cu || $ci_95 <= $cl) {
+                ##push(@data, @wanted_fields);
+                #@data = @wanted_fields;
+            #}
+        #} else {
+            #next unless $cn >= $copy_number;
+        #}
+        #@data = @wanted_fields;
+
+        #dd \@data;
+    #next;
+
+        #printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class;
+        #$count++;
+    #}
+    #unless ( defined $count ) {
+        #print "\t\t>>> No CNVs found with the applied filters! <<<\n";
+    #}
+    #print "\n";
+    }
+}
+
+sub filter_results {
+    my ($data, $filters) = @_;
+
+        # Filter non-hotspots and novel if we don't want them.
+        return if ( ! $$filters{novel} && ($$data{gene} eq '.' || $$filters{HS} eq 'No') );
+
+        if ( $$filters{gene} ) {
+            my @genelist = split(/,/, $$filters{$geneid});
+            return unless ( grep { $$data{gene} eq uc($_) } @genelist );
         }
+        # Filter out non-oncomine CNVs
+        return if $$fitlers{annot} and $gene_class eq '---';
+
+        next unless $tiles and $numtiles >= $tiles;
+
+        my @wanted_fields = qq($chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class);
+        my @data;
+
+        if ($cu and $cl) {
+            if ($ci_5 >= $cu || $ci_95 <= $cl) {
+                #push(@data, @wanted_fields);
+                @data = @wanted_fields;
+            }
+        } else {
+            next unless $cn >= $copy_number;
+        }
+        @data = @wanted_fields;
+
+        dd \@data;
+    next;
+
         printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class;
         $count++;
     }
@@ -182,6 +281,8 @@ for my $sample ( keys %cnv_data ) {
         print "\t\t>>> No CNVs found with the applied filters! <<<\n";
     }
     print "\n";
+=cut
+    return;
 }
 
 sub proc_vcf {
@@ -233,17 +334,15 @@ sub proc_vcf {
         my ($cn) = $data[9] =~ /:([^:]+)$/;
         push( @format, "CN=$cn" );
 
-        #%{$results{$sample_id}->{$varid}} = map { split /=/ } @format;
-        # TODO
         %{$results{$varid}} = map { split /=/ } @format;
     }
     if (DEBUG) {
-        print "="x40, "  DEBUG  ", "="x40, "\n";
+        print "="x35, "  DEBUG  ", "="x35, "\n";
         print "\tSample Name:  $sample_name\n";
         print "\tCellularity:  $cellularity\n";
         print "\tGender:       $gender\n";
         print "\tMAPD:         $mapd\n";
-        print "="x89, "\n";
+        print "="x79, "\n";
     }
     #return \%results, \$sample_name, \$cellularity, \$gender, \$mapd;
     return \%results, \$sample_id;
