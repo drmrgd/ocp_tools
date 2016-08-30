@@ -2,8 +2,8 @@
 # Read in VCF file from IR and output called CNVs
 # 9/20/2014 - D Sims
 #################################################################################################
-use warnings;
-use strict;
+#use warnings;
+#use strict;
 use autodie;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
@@ -16,7 +16,7 @@ use Data::Dump;
 use constant DEBUG => 1;
 
 my $scriptname = basename($0);
-my $version = "v2.3.0_082916";
+my $version = "v2.4.0_083016";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -200,38 +200,11 @@ for my $sample ( keys %cnv_data ) {
         $mapped_cnv_data{GC} = $gene_class;
         $mapped_cnv_data{VC} = $variant_class;
 
-        dd \%mapped_cnv_data;
-        exit;
-
-        my @return_data = filter_results(\%mapped_cnv_data, \%filters);
-
-        ## Filter non-hotspots and novel if we don't want them.
-        #next if ( ! $novel && ($gene eq '.' || $hs eq 'No') );
-        #if ( $geneid ) {
-            #my @genelist = split(/,/, $geneid);
-            #next unless ( grep { $gene eq uc($_) } @genelist );
+        filter_results(\%mapped_cnv_data, \%filters);
+        #if (@return_data) {
+            #dd \@return_data;
+            #print '-'x150, "\n";
         #}
-
-        ## Filter out non-oncomine CNVs
-        #next if $annot and $gene_class eq '---';
-
-        #next unless $tiles and $numtiles >= $tiles;
-
-        #my @wanted_fields = qq($chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class);
-        #my @data;
-
-        #if ($cu and $cl) {
-            #if ($ci_5 >= $cu || $ci_95 <= $cl) {
-                ##push(@data, @wanted_fields);
-                #@data = @wanted_fields;
-            #}
-        #} else {
-            #next unless $cn >= $copy_number;
-        #}
-        #@data = @wanted_fields;
-
-        #dd \@data;
-    #next;
 
         #printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class;
         #$count++;
@@ -243,18 +216,46 @@ for my $sample ( keys %cnv_data ) {
     }
 }
 
+sub return_data {
+    my $data = shift;
+    my @fields = qw( chr gene start END LEN NUMTILES RAW_CN REF_CN ci_05 ci_95 CN GC );
+    return @$data{@fields};
+}
+
 sub filter_results {
     my ($data, $filters) = @_;
+    #dd $data;
+    #dd $filters;
 
+    #if (grep{$$data{gene} eq uc($_)} @{$$filters{gene}}) {
+        #dd $data;
+    #}
         # Filter non-hotspots and novel if we don't want them.
-        return if ( ! $$filters{novel} && ($$data{gene} eq '.' || $$filters{HS} eq 'No') );
+        #print "$$data{gene} => $$data{HS}\n";
+        ##if ( ! $$filters{novel} && ($$data{gene} eq '.' || $$filters{HS} eq 'No') ) {
+        #if ( ! $$filters{novel} && $$filters{HS} eq 'No') {
+        #if ( ! $$filters{novel} ) {
+            #if ($$data{gene} eq '.' || $$filters{HS} eq 'No') {
+                #return;
+            #} else {
+                #print "got here!\n";
+                #print "$$data{gene} => $$data{HS}\n";
+                #return return_data($data);
+            #}
+        #}
 
+        #print "$$data{gene}\n";
+    if ( grep { $$data{gene} eq uc($_) } @{$$filters{gene}} ) {
+        return return_data($data);
+    } else {
+        ;
+        #print "not found: $$data{gene}\n";
+    }
+
+=cut
         if ( $$filters{gene} ) {
-            my @genelist = split(/,/, $$filters{$geneid});
-            return unless ( grep { $$data{gene} eq uc($_) } @genelist );
-        }
         # Filter out non-oncomine CNVs
-        return if $$fitlers{annot} and $gene_class eq '---';
+        return if $$filters{annot} and $gene_class eq '---';
 
         next unless $tiles and $numtiles >= $tiles;
 
