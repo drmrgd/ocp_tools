@@ -245,11 +245,10 @@ sub filter_results {
         #}
 
         #print "$$data{gene}\n";
-    if ( grep { $$data{gene} eq uc($_) } @{$$filters{gene}} ) {
-        return return_data($data);
-    } else {
-        ;
-        #print "not found: $$data{gene}\n";
+    if ($$filters{gene}) {
+        if ( grep { $$data{gene} eq uc($_) } @{$$filters{gene}} ) {
+            return return_data($data);
+        } 
     }
 
 =cut
