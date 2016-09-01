@@ -16,7 +16,7 @@ use Data::Dump;
 use constant DEBUG => 1;
 
 my $scriptname = basename($0);
-my $version = "v2.4.0_083016";
+my $version = "v2.5.0_090116";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -200,11 +200,11 @@ for my $sample ( keys %cnv_data ) {
         $mapped_cnv_data{GC} = $gene_class;
         $mapped_cnv_data{VC} = $variant_class;
 
-        filter_results(\%mapped_cnv_data, \%filters);
-        #if (@return_data) {
-            #dd \@return_data;
-            #print '-'x150, "\n";
-        #}
+        my @filtered_data = filter_results(\%mapped_cnv_data, \%filters);
+        if (@filtered_data) {
+            dd \@filtered_data;
+            print '-'x150, "\n";
+        }
 
         #printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class;
         #$count++;
@@ -222,67 +222,49 @@ sub return_data {
     return @$data{@fields};
 }
 
+sub copy_number_filter {
+    # if there is a 5% / 95% CI filter, use that, otherwise if there's a cn filter use that, and 
+    # if there's nothing, just return it all.
+    my ($data, $threshold) = @_;
+    my ($cn, $cu, $cl) = @$threshold;
+
+    if ($cu and $cl) {
+        ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl) ? return 1 : return 0;
+    } 
+    elsif ($cn) {
+        ($$data{cn} >= $cn) ? return 1 : return 0;
+    } else {
+        return 1;
+    }
+}
+
 sub filter_results {
     my ($data, $filters) = @_;
-    #dd $data;
-    #dd $filters;
+    my @cn_thresholds = $$filters{qw(cn cu cl)};
 
-    #if (grep{$$data{gene} eq uc($_)} @{$$filters{gene}}) {
-        #dd $data;
-    #}
-        # Filter non-hotspots and novel if we don't want them.
-        #print "$$data{gene} => $$data{HS}\n";
-        ##if ( ! $$filters{novel} && ($$data{gene} eq '.' || $$filters{HS} eq 'No') ) {
-        #if ( ! $$filters{novel} && $$filters{HS} eq 'No') {
-        #if ( ! $$filters{novel} ) {
-            #if ($$data{gene} eq '.' || $$filters{HS} eq 'No') {
-                #return;
-            #} else {
-                #print "got here!\n";
-                #print "$$data{gene} => $$data{HS}\n";
-                #return return_data($data);
-            #}
-        #}
+    # Filter non-hotspots and novel if we don't want them.
+    #unless ($$filters{novel} && ($$data{gene} eq '.' or $$data{HS})) return;
 
-        #print "$$data{gene}\n";
+
+    # Gene level filter
     if ($$filters{gene}) {
         if ( grep { $$data{gene} eq uc($_) } @{$$filters{gene}} ) {
-            return return_data($data);
+            return return_data($data) if copy_number_filter($data, \@cn_thresholds);
         } 
     }
 
-=cut
-        if ( $$filters{gene} ) {
-        # Filter out non-oncomine CNVs
-        return if $$filters{annot} and $gene_class eq '---';
-
-        next unless $tiles and $numtiles >= $tiles;
-
-        my @wanted_fields = qq($chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class);
-        my @data;
-
-        if ($cu and $cl) {
-            if ($ci_5 >= $cu || $ci_95 <= $cl) {
-                #push(@data, @wanted_fields);
-                @data = @wanted_fields;
-            }
-        } else {
-            next unless $cn >= $copy_number;
-        }
-        @data = @wanted_fields;
-
-        dd \@data;
-    next;
-
-        printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class;
-        $count++;
+    # OVAT Filter
+    if ($$filters{annot} and $$data{GC} ne '---') {
+        return return_data($data) if copy_number_filter($data, \@cn_thresholds);
     }
-    unless ( defined $count ) {
-        print "\t\t>>> No CNVs found with the applied filters! <<<\n";
+
+    # Number of tiles filter
+    if ($$filters{tiles} and $$data{NUMTILES} > $$filters{tiles}) {
+        return return_data($data) if copy_number_filter($data, \@cn_thresholds);
     }
-    print "\n";
-=cut
+
     return;
+    return return_data($data);
 }
 
 sub proc_vcf {
