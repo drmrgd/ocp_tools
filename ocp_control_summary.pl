@@ -9,7 +9,7 @@ use List::Util qw(max sum);
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v2.0.0_081816";
+my $version = "v2.1.0_090116";
 my $description = <<"EOT";
 Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR. Can
 report both the internal expression control data and the 5'3'Assay data.  
@@ -76,14 +76,21 @@ for my $input_file ( @files ) {
         push(@used_controls, $control) unless grep {$_ eq $control} @used_controls;
     }
     @fp_controls = qw( NTRK1_5p3p ALK_5p3p ROS1_5p3p RET_5p3p );
-    
     (my $name = basename($input_file)) =~ s/\.vcf//;
     open( my $in_fh, "<", $input_file ) || die "Can't open the file '$input_file' for reading: $!";
     my %parsed_data;
     my $sum = 0;
+    my $sample;
     while (<$in_fh>) {
+        if (/^#CHROM/) {
+            my @elems = split(/\s+/, $_);
+            $sample = $elems[-1];
+            $sample //= $name;
+            $results{$name}->{sample} = $sample;
+        }
+
         next if /^#/;
-        if ( /ExprControl/ ) {
+        if ( /SVTYPE=ExprControl/ ) {
             my @data = split;
             my ($gene, $count) = map { /GENE_NAME=(.*?);READ_COUNT=(\d+);.*/ } @data;
             $parsed_data{expr}->{$gene} = $count;
@@ -109,20 +116,26 @@ for my $input_file ( @files ) {
 
     # Convert zeros in output to '---' to make the table a little cleaner
     for my $control ( @expr_controls ) {
-        ($parsed_data{expr}->{$control} == 0) ? 
-        ($results{$name}->{expr}{$control} = ' ---') : 
-        ($results{$name}->{expr}{$control} = $parsed_data{expr}->{$control} );
+        ($parsed_data{expr}->{$control} == 0)
+        ?  ($results{$name}->{expr}{$control} = ' ---')
+        :  ($results{$name}->{expr}{$control} = $parsed_data{expr}->{$control} );
     }
     
     for my $control ( @fp_controls ) {
-        ($parsed_data{fptp}->{$control}[0] eq '0,0') ? 
-        ($results{$name}->{fptp}{$control} = [' ---', ' ---']) : 
-        ($results{$name}->{fptp}{$control} = $parsed_data{fptp}->{$control} );
+        ($parsed_data{fptp}->{$control}[0] eq '0,0')
+        ?  ($results{$name}->{fptp}{$control} = [' ---', ' ---'])
+        :  ($results{$name}->{fptp}{$control} = $parsed_data{fptp}->{$control} );
     }
 }
 
 # Get the longest sample name width
-my ($width) = max( map { length($_)+4 } keys %results );
+#my ($width) = max( map { length($_)+4 } keys %results );
+my $width = 0;
+for my $file (keys %results) {
+    my $len = length($results{$file}->{sample});
+    $width = $len if $len > $width;
+}
+$width += 4;
 my $top_pad = ($width+62);
 
 # Create header
@@ -140,7 +153,8 @@ printf "%-${width}s$epad", 'Samples', sort @used_controls;
 
 # Print out all control data;
 for my $sample ( sort keys %results ) {
-    printf "%-${width}s", $sample;
+    #printf "%-${width}s", $sample;
+    printf "%-${width}s", $results{$sample}->{sample};
     for my $control (sort @used_controls) {
         $results{$sample}->{expr}{$control} //= 'N/A';
         printf "%-10s", $results{$sample}->{expr}{$control}
