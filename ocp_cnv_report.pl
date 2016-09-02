@@ -15,8 +15,15 @@ use Data::Dump;
 
 use constant DEBUG => 1;
 
+# Remove when in prod.
+print "\n";
+print colored("*" x 50, 'bold yellow on_black'), "\n";
+print colored("      DEVELOPMENT VERSION OF OCP_CNV_REPORT\n", 'bold yellow on_black');
+print colored("*" x 50, 'bold yellow on_black');
+print "\n\n";
+
 my $scriptname = basename($0);
-my $version = "v2.5.0_090116";
+my $version = "v2.5.0_090116-dev";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
