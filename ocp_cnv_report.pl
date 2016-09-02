@@ -12,6 +12,7 @@ use Sort::Versions;
 use JSON -support_by_pp;
 use Parallel::ForkManager;
 use Data::Dump;
+use Term::ANSIColor;
 
 use constant DEBUG => 1;
 
@@ -23,7 +24,7 @@ print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.5.0_090116-dev";
+my $version = "v2.6.0_090216-dev";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -103,6 +104,7 @@ my %filters = (
     'annot' => $annot,
     'novel' => $novel,
 );
+dd @{$filters{gene}};
 
 if (DEBUG) {
     print '='x35, '  DEBUG  ', '='x35, "\n";
@@ -175,19 +177,14 @@ for my $sample ( keys %cnv_data ) {
     for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$cnv_data{$sample}} ) {
         my %mapped_cnv_data;
         last if $cnv eq 'NONE';
+
         # Seems to be a bug in the same the CI are reported for deletions.  Solution correctly reports the value
         # in the VCF, but it's not so informative.  This will give a better set of data.
         my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/; 
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
-        #my ($end, $length, $numtiles, $raw_cn, $ref_cn, $cn, $hs, $func) = map { $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
-
         %mapped_cnv_data = map{ $_ => $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
         @mapped_cnv_data{qw(ci_05 ci_95)} = ($ci_5,$ci_95);
         @mapped_cnv_data{qw(chr start gene undef)} = split(/:/, $cnv);
-
-        #$hs //= 'No';
-        #$ci_5 //= 0;
-        #$ci_95 //= 0;
         $mapped_cnv_data{HS} //= 'No';
         $mapped_cnv_data{ci_05} //= 0;
         $mapped_cnv_data{ci_95} //= 0;
@@ -195,7 +192,6 @@ for my $sample ( keys %cnv_data ) {
         # Get OVAT Annot Data
         my ($gene_class, $variant_class);
         my $func = $mapped_cnv_data{FUNC};
-        #if ( $mapped_cnv_data{$func} && $mapped_cnv_data{$func} =~ /oncomine/ ) {
         if ( $func && $func =~ /oncomine/ ) {
             my $json_annot = JSON->new->allow_singlequote->decode($func);
             my $parsed_annot = $$json_annot[0];
@@ -212,6 +208,12 @@ for my $sample ( keys %cnv_data ) {
             dd \@filtered_data;
             print '-'x150, "\n";
         }
+    }
+    print_results();
+}
+
+sub print_results {
+    __exit__(__LINE__, "Stopping point.  Start and implement print sub");
 
         #printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class;
         #$count++;
@@ -220,12 +222,39 @@ for my $sample ( keys %cnv_data ) {
         #print "\t\t>>> No CNVs found with the applied filters! <<<\n";
     #}
     #print "\n";
+    return;
+
+}
+
+sub filter_results {
+    my ($data, $filters) = @_;
+    my @cn_thresholds = $$filters{qw(cn cu cl)};
+
+    # Filter non-hotspots and novel if we don't want them.
+    if ($$data{HS} eq 'No' || $$data{gene} eq '.') {
+        return unless $$filters{novel};
     }
+
+    # Number of tiles filter
+    return if ($$filters{tiles} and $$data{NUMTILES} < $$filters{tiles});
+
+    # OVAT Filter
+    return if ($$filters{annot} and $$data{GC} eq '---');
+
+    # Gene level filter
+    if (@{$filters{gene}}) {
+        unless ( grep { $$data{gene} eq uc($_) } @{$$filters{gene}} ) {
+            return;
+        } 
+    }
+
+    # We made it the whole way through; check for copy number thresholds.
+    return return_data($data) if copy_number_filter($data, \@cn_thresholds);
 }
 
 sub return_data {
     my $data = shift;
-    my @fields = qw( chr gene start END LEN NUMTILES RAW_CN REF_CN ci_05 ci_95 CN GC );
+    my @fields = qw( chr gene start END LEN NUMTILES RAW_CN REF_CN ci_05 ci_95 CN GC HS );
     return @$data{@fields};
 }
 
@@ -243,35 +272,6 @@ sub copy_number_filter {
     } else {
         return 1;
     }
-}
-
-sub filter_results {
-    my ($data, $filters) = @_;
-    my @cn_thresholds = $$filters{qw(cn cu cl)};
-
-    # Filter non-hotspots and novel if we don't want them.
-    #unless ($$filters{novel} && ($$data{gene} eq '.' or $$data{HS})) return;
-
-
-    # Gene level filter
-    if ($$filters{gene}) {
-        if ( grep { $$data{gene} eq uc($_) } @{$$filters{gene}} ) {
-            return return_data($data) if copy_number_filter($data, \@cn_thresholds);
-        } 
-    }
-
-    # OVAT Filter
-    if ($$filters{annot} and $$data{GC} ne '---') {
-        return return_data($data) if copy_number_filter($data, \@cn_thresholds);
-    }
-
-    # Number of tiles filter
-    if ($$filters{tiles} and $$data{NUMTILES} > $$filters{tiles}) {
-        return return_data($data) if copy_number_filter($data, \@cn_thresholds);
-    }
-
-    return;
-    return return_data($data);
 }
 
 sub proc_vcf {
@@ -335,4 +335,12 @@ sub proc_vcf {
     }
     #return \%results, \$sample_name, \$cellularity, \$gender, \$mapd;
     return \%results, \$sample_id;
+}
+
+sub __exit__ {
+    my ($line, $msg) = @_;
+    print "\n\n";
+    print colored("Got exit message at line: $line with message:\n$msg", 'bold white on_green');
+    print "\n";
+    exit;
 }
