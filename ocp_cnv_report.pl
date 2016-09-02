@@ -14,7 +14,7 @@ use Parallel::ForkManager;
 use Data::Dump;
 use Term::ANSIColor;
 
-use constant DEBUG => 1;
+use constant DEBUG => 0;
 
 # Remove when in prod.
 print "\n";
@@ -24,10 +24,11 @@ print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.7.0_090216-dev";
+my $version = "v2.8.0_090216-dev";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
-called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
+called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls. Also can output
+a raw formatted table that is easily imported into Excel and R for downstream analysis.
 EOT
 
 my $usage = <<"EOT";
@@ -44,7 +45,10 @@ USAGE: $scriptname [options] <VCF_file(s)>
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
-    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty print (as 'pp').  DEFAULT: pp
+    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty print (as 'pp').  DEFAULT: pp. This format
+                      Still retains the header and whatnot.
+    -r, --raw         Output as a raw CSV format that can be input into Excel.  The header output is not in columns as a part of the
+                      whole.
     -v, --version     Version information
     -h, --help        Print this help information
 EOT
@@ -61,6 +65,7 @@ my $tiles;
 my $annot;
 my $nocall;
 my $format = 'pp';
+my $raw_output;
 
 GetOptions( "novel|n"             => \$novel,
             "copy-number|cn=f"    => \$copy_number,
@@ -71,6 +76,7 @@ GetOptions( "novel|n"             => \$novel,
             "annot|a"             => \$annot,
             "output|o=s"          => \$outfile,
             "format|f=s"          => \$format,
+            "raw|r"               => \$raw_output,
             "NOCALL|N"            => \$nocall,
             "version|v"           => \$ver_info,
             "help|h"              => \$help )
@@ -117,7 +123,7 @@ if (DEBUG) {
 my %formats = (
     'csv'   => ',',
     'tsv'   => "\t",
-    'pp'    => ' ',
+    'pp'    => '',
 );
 
 # Set the output format delimiter
@@ -171,6 +177,7 @@ $pm->wait_all_children;
 
 my %results;
 for my $sample ( keys %cnv_data ) {
+    $results{$sample} = [];
     my @outfields = qw( END LEN NUMTILES RAW_CN REF_CN CN HS FUNC );
     for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$cnv_data{$sample}} ) {
         my %mapped_cnv_data;
@@ -205,38 +212,46 @@ for my $sample ( keys %cnv_data ) {
         push(@{$results{$sample}}, \@filtered_data) if @filtered_data;
     }
 }
-#dd \%results;
 print_results(\%results, $delimiter);
 
 sub print_results {
     my ($data, $delimiter) = @_;
     my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN Annot );
-    #my $format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s\n";
-    my @field_widths = qw(%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s);
-    my $format = join($delimiter, @field_widths);
-    $format .= "\n";
+    my $pp_format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s\n";
 
     select $out_fh;
 
-    for my $sample (%$data) {
-        print "sample: $sample\n";
-        print join("\t", split(/:/, $sample)), "\n";
-        #my ($id, $gender, $mapd, $cell) = split( /:/, $sample );
+    raw_output($data) if $raw_output;
 
-        #print "::: CNV Data For $id (Gender: $gender, Cellularity: $cell, MAPD: $mapd) :::\n";
-        #printf $format, @header;
+    for my $sample (keys %$data) {
+        my ($id, $gender, $mapd, $cellularity) = split( /:/, $sample );
+        print "::: CNV Data For $id (Gender: $gender, Cellularity: $cellularity, MAPD: $mapd) :::\n";
+        ($delimiter) ? print join($delimiter, @header),"\n" : printf $pp_format, @header;
+        if ( ! @{$$data{$sample}} ) {
+            print ">>>>  No Reportable CNVs Found in Sample  <<<<\n"; 
+        } else {
+            for my $cnv (@{$$data{$sample}}) {
+                ($delimiter) ? print join($delimiter, @$cnv), "\n" : printf $pp_format, @$cnv;
+            }
+        }
+        print "\n";
     }
-
-        #printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class;
-        #$count++;
-    #}
-    #unless ( defined $count ) {
-        #print "\t\t>>> No CNVs found with the applied filters! <<<\n";
-    #}
-    #print "\n";
-    __exit__(__LINE__, "Stopping point.  Working on print method.");
     return;
+}
 
+sub raw_output {
+    my $data = shift;
+    my @header = qw( Sample Gender Cellularity MAPD Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN Annot );
+    select $out_fh;
+    print join(',', @header), "\n";
+
+    for my $sample (keys %$data) {
+        my @elems = split(/:/, $sample);
+        for my $cnv (@{$$data{$sample}}) {
+            print join(',', @elems, @$cnv), "\n";
+        }
+    }
+    exit;
 }
 
 sub filter_results {
@@ -267,7 +282,7 @@ sub filter_results {
 
 sub return_data {
     my $data = shift;
-    my @fields = qw( chr gene start END LEN NUMTILES RAW_CN REF_CN ci_05 ci_95 CN GC HS );
+    my @fields = qw( chr gene start END LEN NUMTILES RAW_CN REF_CN ci_05 ci_95 CN GC);
     return @$data{@fields};
 }
 
@@ -316,8 +331,6 @@ sub proc_vcf {
             $sample_name = $data[-1] and next;
         }
         next unless $data[4] eq '<CNV>';
-
-        #my $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
         $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
 
         # Let's handle NOCALLs for MATCHBox compatibility (prefer to filter on my own though).
@@ -346,7 +359,6 @@ sub proc_vcf {
         print "\tMAPD:         $mapd\n";
         print "="x79, "\n";
     }
-    #return \%results, \$sample_name, \$cellularity, \$gender, \$mapd;
     return \%results, \$sample_id;
 }
 
