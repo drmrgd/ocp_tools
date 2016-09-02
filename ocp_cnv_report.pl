@@ -2,8 +2,8 @@
 # Read in VCF file from IR and output called CNVs
 # 9/20/2014 - D Sims
 #################################################################################################
-#use warnings;
-#use strict;
+use warnings;
+use strict;
 use autodie;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
@@ -24,7 +24,7 @@ print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.6.0_090216-dev";
+my $version = "v2.7.0_090216-dev";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls.
@@ -44,7 +44,7 @@ USAGE: $scriptname [options] <VCF_file(s)>
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
-    -r, --raw         Output raw CSV data, rather than pretty printed report.
+    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty print (as 'pp').  DEFAULT: pp
     -v, --version     Version information
     -h, --help        Print this help information
 EOT
@@ -60,7 +60,7 @@ my $geneid;
 my $tiles;
 my $annot;
 my $nocall;
-my $raw_output;
+my $format = 'pp';
 
 GetOptions( "novel|n"             => \$novel,
             "copy-number|cn=f"    => \$copy_number,
@@ -70,9 +70,9 @@ GetOptions( "novel|n"             => \$novel,
             "tiles|t=i"           => \$tiles,
             "annot|a"             => \$annot,
             "output|o=s"          => \$outfile,
+            "format|f=s"          => \$format,
             "NOCALL|N"            => \$nocall,
             "version|v"           => \$ver_info,
-            "raw|r"               => \$raw_output,
             "help|h"              => \$help )
         or die $usage;
 
@@ -104,7 +104,6 @@ my %filters = (
     'annot' => $annot,
     'novel' => $novel,
 );
-dd @{$filters{gene}};
 
 if (DEBUG) {
     print '='x35, '  DEBUG  ', '='x35, "\n";
@@ -115,6 +114,16 @@ if (DEBUG) {
     }
     print '='x79, "\n";
 }
+my %formats = (
+    'csv'   => ',',
+    'tsv'   => "\t",
+    'pp'    => ' ',
+);
+
+# Set the output format delimiter
+my $delimiter;
+die "ERROR: '$format' is not a valid option as a delimiter!\n" unless defined $formats{$format};
+($format) ? ($delimiter = $formats{$format}) : ($delimiter = $formats{pp});
 
 # Make sure enough args passed to script
 if ( scalar( @ARGV ) < 1 ) {
@@ -160,20 +169,9 @@ for my $input_file (@vcfs) {
 }
 $pm->wait_all_children;
 
-# Set up for printing output
-my @outfields = qw( END LEN NUMTILES RAW_CN REF_CN CN HS FUNC );
-my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN Annot );
-my $format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s\n";
-
-select $out_fh;
-
-# Print out each sample's data
+my %results;
 for my $sample ( keys %cnv_data ) {
-    my ($id, $gender, $mapd, $cell) = split( /:/, $sample );
-    my $count;
-    print "::: CNV Data For $id (Gender: $gender, Cellularity: $cell, MAPD: $mapd) :::\n";
-    printf $format, @header;
-
+    my @outfields = qw( END LEN NUMTILES RAW_CN REF_CN CN HS FUNC );
     for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$cnv_data{$sample}} ) {
         my %mapped_cnv_data;
         last if $cnv eq 'NONE';
@@ -204,16 +202,33 @@ for my $sample ( keys %cnv_data ) {
         $mapped_cnv_data{VC} = $variant_class;
 
         my @filtered_data = filter_results(\%mapped_cnv_data, \%filters);
-        if (@filtered_data) {
-            dd \@filtered_data;
-            print '-'x150, "\n";
-        }
+        push(@{$results{$sample}}, \@filtered_data) if @filtered_data;
+        #if (@filtered_data) {
+            #dd \@filtered_data;
+            #print '-'x150, "\n";
+        #}
     }
-    print_results();
 }
+dd \%results;
+print_results(\%results, $delimiter);
 
 sub print_results {
-    __exit__(__LINE__, "Stopping point.  Start and implement print sub");
+    my ($data, $delimiter) = @_;
+    my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN Annot );
+    #my $format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s\n";
+    my @field_widths = qw(%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s);
+    my $format = join($delimiter, @field_widths);
+    print "format: $format\n";
+
+    __exit__(__LINE__, "Stopping point.  Working on print method.");
+    select $out_fh;
+
+    for my $sample (%$data) {
+        my ($id, $gender, $mapd, $cell) = split( /:/, $sample );
+
+        print "::: CNV Data For $id (Gender: $gender, Cellularity: $cell, MAPD: $mapd) :::\n";
+        printf $format, @header;
+    }
 
         #printf $format, $chr, $gene, $start, $end, $length, $numtiles, $raw_cn, $ref_cn, $ci_5, $ci_95, $cn, $gene_class;
         #$count++;
