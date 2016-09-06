@@ -15,7 +15,7 @@ use Term::ANSIColor;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.3.0_082416";
+my $version = "v1.4.0_090616";
 my $description = <<"EOT";
 Generate a summary MATCH control report.  Need to input a list of VCF files and the version of the MATCH control used.  By
 default we'll use version 2.  Also, can output as a pretty printed report, or can output as a CSV for importation into 
@@ -25,6 +25,7 @@ EOT
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <vcf_file(s)>
     -l, --lookup    Version of lookup table to use (1 or 2). DEFAULT: 2.
+    -s, --site      Manually chose the MATCH site rather than deducing it from the file data.
     -f, --format    Method to format the report output (pp: pretty print, csv: CSV file).  DEFAULT: 'pp'.
     -o, --output    Send output to custom file.  Default is STDOUT.
     -v, --version   Version information
@@ -36,10 +37,12 @@ my $ver_info;
 my $outfile;
 my $lookup_table = 2;
 my $format = 'pp';
+my $sequencing_site;
 
 GetOptions( "lookup|l=s"    => \$lookup_table, 
             "format|f=s"    => \$format,
             "output|o=s"    => \$outfile,
+            "site|s=s"      => \$sequencing_site,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
         or die $usage;
@@ -65,6 +68,13 @@ if ( scalar( @ARGV ) < 1 ) {
 }
 
 die "ERROR: You must choose either 'pp' or 'csv' for report format with the '-f' option!\n" if ($format ne 'pp' && $format ne 'csv');
+
+# Validate site input
+my @valid_sites = qw(NCI MDA YSM MGH);
+if ($sequencing_site) {
+    $sequencing_site = uc($sequencing_site);
+    die "ERROR: Invalid site '$sequencing_site'!\n" unless grep { $sequencing_site eq $_ } @valid_sites;
+}
 
 # Write output to either indicated file or STDOUT
 my $out_fh;
@@ -187,7 +197,14 @@ sub generate_report {
     push(@output_strings, format_report_string(\$format, $sample_width, \@header));
 
     for my $sample ( sort{versioncmp($a, $b)} keys %$data ) {
-        my $site = get_site_name($sample);
+        my $site;
+        ($sequencing_site)
+            ? ($site = $sequencing_site)
+            : ($site = get_site_name($sample));
+
+        # If no input and no deduced site, then just print a placeholder string
+        warn "WARN: No sequencing site info available!\n" if $site eq '---';
+
         for my $variant (sort{ $$data{$sample}->{$b}[0] cmp $$data{$sample}->{$a}[0] } keys $$data{$sample}) {
             my $type = $$data{$sample}->{$variant}[0];
             my @wanted_indices = @{$want_fields{$type}};
@@ -217,8 +234,10 @@ sub get_site_name {
         'MDACC'  => 'MDA',
         'MGH',   => 'MGH',
         'Yale'   => 'YSM',
+        'NA'     => '---',
     );
     (my $site) = $sample_string =~ /^SampleControl_(\w+?)_\d+/;
+    $site //= 'NA';
     return $sites{$site};
 }
 
