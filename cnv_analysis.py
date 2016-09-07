@@ -9,7 +9,7 @@ from pprint import pprint as pp
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 
-version = '2.0.0_082916'
+version = '2.0.1_000716'
 
 def get_opts():
     parser = argparse.ArgumentParser(
@@ -31,7 +31,7 @@ def get_opts():
     return args
 
 def read_file(vcf,gene,cn):
-    cmd = 'ocp_cnv_report.pl -g {} -c {} {}'.format(gene, str(cn), vcf)
+    cmd = 'ocp_cnv_report.pl -g {} --cn {} {}'.format(gene, str(cn), vcf)
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     result,err = p.communicate()
     try:
