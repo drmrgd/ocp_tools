@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.6.0_082516";
+my $version = "v4.6.1_090816";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -33,8 +33,8 @@ EOT
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
     -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: 5%)
-    --cu         INT   EXPERIMENTAL: Set upper bound for amplifications (DEFAULT 5% CI >= 4) 
-    --cl         INT   EXPERIMENTAL: Set lower bound for deletions (DEFAULT 95% CI <= 1) 
+    --cu         INT   Set upper bound for amplifications (DEFAULT 5% CI >= 4) 
+    --cl         INT   Set lower bound for deletions (DEFAULT 95% CI <= 1) 
     -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
     -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 100 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
