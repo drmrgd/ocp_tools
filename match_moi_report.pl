@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.6.1_090816";
+my $version = "v4.6.2_090816";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -270,7 +270,8 @@ sub proc_ipc {
     my $vcf_file = shift;
     my $assay_version = shift;
     my $cmd = "ocp_control_summary.pl $$vcf_file";
-    $cmd .= " -O" if $$assay_version eq 'ocp';
+    #$cmd .= " -O" if $$assay_version eq 'ocp';
+    $cmd .= " -m 1" if $$assay_version eq 'ocp';
 
     open( my $vcf_data, '-|', $cmd ) || die "ERROR: Can't parse the expression control data";
     my ($expr_sum) = map {/\s+(\d+)\s*$/} <$vcf_data>; # trailing whitespace in ocp_control_summary output.
