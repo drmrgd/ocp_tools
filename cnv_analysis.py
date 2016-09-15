@@ -97,6 +97,8 @@ def output_data(cnv_data,delimiter):
     return
 
 def arg_star(args):
+    '''Constructor to generate a method call to read_file with supplied args.  We need this to be able to use the 
+    pool function with multiple arguments. '''
     return read_file(*args)
 
 def get_width(data):
