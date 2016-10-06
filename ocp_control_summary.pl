@@ -102,6 +102,7 @@ for my $input_file ( @files ) {
 
         # Add in the 5P3P Data
         if ( /5p3pAssays/ ) {
+            # TODO: 5'3' assays are being removed it looks like.
             my @data = split;
             my ($gene, $count, $ratio) = map { /GENE_NAME=(.*?);READ_COUNT=(\d+,\d+);5P_3P_ASSAYS=(.*?);/ } @data;
             $parsed_data{fptp}->{"${gene}_5p3p"} = [$count,sprintf("%.4g", $ratio)];
