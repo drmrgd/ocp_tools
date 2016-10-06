@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.6.0_082516";
+my $version = "v4.6.1_100416";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -206,10 +206,10 @@ sub proc_snv_indel {
             # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
             elsif ( $gene eq 'EGFR' ) { 
                 if ( $exon == 19 && $function eq 'nonframeshiftDeletion' ) {
-                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftDeletion in Exon 20');
+                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftDeletion in Exon 19');
                 }
                 elsif ($exon == 20 && $function eq 'nonframeshiftInsertion') {
-                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 19');
+                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 20');
                 }
             }
             # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
@@ -367,6 +367,10 @@ sub raw_output {
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
     my $mapd = $$cnv_data{'META'}[2];
     select $out_fh;
+    dd $snv_indels;
+    dd $fusion_data;
+    dd $cnv_data;
+    
 
     for my $var (sort{ versioncmp( $a, $b ) } keys %$snv_indels) {
         print join(',', 'SNV', @{$$snv_indels{$var}}), "\n";
