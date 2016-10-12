@@ -15,7 +15,7 @@ use Term::ANSIColor;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.4.0_090616";
+my $version = "v1.4.2_101216";
 my $description = <<"EOT";
 Generate a summary MATCH control report.  Need to input a list of VCF files and the version of the MATCH control used.  By
 default we'll use version 2.  Also, can output as a pretty printed report, or can output as a CSV for importation into 
@@ -113,13 +113,14 @@ generate_report(\%control_data, $format);
 
 sub check_results {
     my ($data,$lookup_table) = @_;
+
     my %v2_lookup_table = (
         'chr3:178916946:G:C:PIK3CA'  => '',
         'chr7:140453136:A:T:BRAF'    => '',
-        'chr10:89717716:T:TA:PTEN'   => '',
+        'chr10:89717715:T:TA:PTEN'   => '',
         'chr13:32968850:C:A:BRCA2'   => '',
-        'chr13:48916816:CACTT:C:RB1' => '',
-        'chr17:7574003:CG:C:TP53'    => '',
+        'chr13:48916815:CACTT:C:RB1' => '',
+        'chr17:7574002:CG:C:TP53'    => '',
         'chr17:ERBB2'                => '',
         'chr17:RPS6KB1'              => '',
         'chr20:ZNF217'               => '',
@@ -133,8 +134,8 @@ sub check_results {
         'chr7:140453136:A:T:BRAF'    => '',
         'chr10:89717716:T:TA:PTEN'   => '',
         'chr13:32968850:C:A:BRCA2'   => '',
-        'chr13:48916816:CACTT:C:RB1' => '',
-        'chr17:7574003:CG:C:TP53'    => '',
+        'chr13:48916815:CACTT:C:RB1' => '',
+        'chr17:7574002:CG:C:TP53'    => '',
         'chr17:ERBB2'                => '',
         'chr17:RPS6KB1'              => '',
         'chr20:ZNF217'               => '',
@@ -146,6 +147,13 @@ sub check_results {
         1  => \%v1_lookup_table,
         2  => \%v2_lookup_table,
     );
+
+    unless (defined $lookup_tables{$lookup_table}) {
+        print "ERROR: Lookup table '$lookup_table' is not a valid lookup table!  Valid tables are:\n";
+        #print "\t$_  => $lookup_tables{$_}\n" for keys %lookup_tables;
+        print "\t$_  => v$_\n" for sort keys %lookup_tables;
+        exit 1;
+    }
 
     my %results;
     my %truth_table = %{$lookup_tables{$lookup_table}};
@@ -247,7 +255,8 @@ sub proc_vcf {
 
     # Don't output these calls since we want them filtered anyway.
     my @filtered_variants = qw( chr17:7579473:G:C:TP53 );
-    push(@filtered_variants, 'EML4-ALK.E6bA20') if $lookup_table == 2;
+    #push(@filtered_variants, 'EML4-ALK.E6bA20') if $lookup_table == 2;
+    push(@filtered_variants, 'EML4-ALK.E6bA20') if $lookup_table =~ /[23]/; 
     my $cmd = qq(match_moi_report.pl -n -r -R1000 -c7 $$vcf) ;
 
     open( my $moi_report_pipe, '-|', $cmd);
