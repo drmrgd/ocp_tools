@@ -142,6 +142,7 @@ sub proc_snv_indel {
     my @blacklisted_variants = qw(
         chr2:16082320:C:CCG
         chr2:209108317:C:T
+        chr3:10183734:C:T
         chr4:55593464:A:C
         chr4:55964925:G:A
         chr4:106196819:G:T
