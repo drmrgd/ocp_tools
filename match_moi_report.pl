@@ -407,7 +407,7 @@ sub gen_report {
     #########################
     print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n",'ansi3');
     ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
-    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript HGVS Protein Function oncomineGeneClass 
+    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript CDS Protein Function oncomineGeneClass 
                                oncomineVariantClass Functional_Rule );
     my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-16s %-${w4}s %-16s %-23s %-21s %-22s %-21s\n";
 
