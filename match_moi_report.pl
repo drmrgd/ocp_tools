@@ -154,7 +154,7 @@ sub proc_snv_indel {
         chr7:116340262:A:G
         chr7:116411990:C:T
         chr9:98209628:T:TG
-        chr9:139391438:TG:T
+        chr9:139391437:TG:T
         chr9:139391975:GC:G
         chr9:139399132:C:T
         chr10:89685288:T:TA
