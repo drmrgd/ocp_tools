@@ -120,7 +120,8 @@ def user_query(query, default='no'):
 
 def validate_bams(msn, bam, na_type):
     '''Validate the BAM files passed into the script, and if OK, get a new file name, get analysis ID, and index them'''
-    match = re.search('^.*?(MSN\d+_.*?_[cv]\d+_.*)_([dr]na).bam', bam)
+    # match = re.search('^.*?(MSN\d+_.*?_[cv]\d+_.*)_([dr]na).bam', bam)
+    match = re.search('^.*?(MSN\d+_[cv]\d+_.*)_([dr]na).bam', bam)
 
     sample = match.group(2)
     if sample != na_type:
