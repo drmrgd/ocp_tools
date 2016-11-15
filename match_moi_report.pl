@@ -484,7 +484,7 @@ sub gen_report {
         (@ipc_output = ("**$commified_reads**", 'bold red on_black')) : 
         (@ipc_output = ($commified_reads, 'ansi3'));
 
-    print_msg("::: MATCH Reportable Fusions (Total Reads: ",'ansi3');
+    print_msg("::: MATCH Reportable Fusions (Total Mapped Reads: ",'ansi3');
     print_msg(@read_count);
     print_msg('; Sum Expression Control Reads: ','ansi3');
     print_msg(@ipc_output);
