@@ -14,7 +14,7 @@ use Parallel::ForkManager;
 use Data::Dump;
 use Term::ANSIColor;
 
-use constant DEBUG => 0;
+use constant DEBUG => 1;
 
 # Remove when in prod.
 #print "\n";
@@ -24,7 +24,7 @@ use constant DEBUG => 0;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.0.0_090216";
+my $version = "v3.1.0_111516";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls. Also can output
@@ -212,6 +212,9 @@ for my $sample ( keys %cnv_data ) {
         push(@{$results{$sample}}, \@filtered_data) if @filtered_data;
     }
 }
+# XXX
+dd \%results;
+exit;
 print_results(\%results, $delimiter);
 
 sub print_results {
@@ -221,6 +224,7 @@ sub print_results {
 
     select $out_fh;
 
+    # Print out comma separated dataset for easy import into Excel and whatnot.
     raw_output($data) if $raw_output;
 
     for my $sample (keys %$data) {
@@ -255,12 +259,17 @@ sub raw_output {
 }
 
 sub filter_results {
+    # TODO: This filter is not working.  If we ask for a gene, even if there is no data for that gene, we're
+    #       passing a null result ('0') out of this function.  This is confusing the downstream code and
+    #       making it think there is a positive result.  We need to fix these filter chains to prevent this
+    #       kind of thing from happening.
     my ($data, $filters) = @_;
-    my @cn_thresholds = $$filters{qw(cn cu cl)};
+    my @cn_thresholds = @$filters{qw(cn cu cl)};
 
     # Filter non-hotspots and novel if we don't want them.
     if ($$data{HS} eq 'No' || $$data{gene} eq '.') {
-        return unless $$filters{novel};
+        return;
+        #return return_data($data) unless $$filters{novel} and copy_number_filter($data, \@cn_thresholds);
     }
 
     # Number of tiles filter
@@ -272,12 +281,16 @@ sub filter_results {
     # Gene level filter
     if (@{$filters{gene}}) {
         unless ( grep { $$data{gene} eq uc($_) } @{$$filters{gene}} ) {
-            return;
+            return return_data($data) if copy_number_filter($data, \@cn_thresholds);
         } 
     }
 
     # We made it the whole way through; check for copy number thresholds.
     return return_data($data) if copy_number_filter($data, \@cn_thresholds);
+    #my $rt = copy_number_filter($data, \@cn_thresholds);
+    #print "return code: $rt\n";
+    #print join(',',return_data($data)), "\n" if $rt;
+    #return return_data($data) if copy_number_filter($data, \@cn_thresholds);
 }
 
 sub return_data {
@@ -289,14 +302,26 @@ sub return_data {
 sub copy_number_filter {
     # if there is a 5% / 95% CI filter, use that, otherwise if there's a cn filter use that, and 
     # if there's nothing, just return it all.
+    no warnings;
     my ($data, $threshold) = @_;
     my ($cn, $cu, $cl) = @$threshold;
 
-    if ($cu and $cl) {
-        ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl) ? return 1 : return 0;
-    } 
-    elsif ($cn) {
-        ($$data{cn} >= $cn) ? return 1 : return 0;
+    if ($cn) {
+        ($$data{CN} >= $cn) ? return 1 : return 0;
+    }
+    elsif ($cu) {
+        if ($cl) {
+            ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl) ? return 1 : return 0;
+        } else {
+            ($$data{ci_05} >= $cu) ? return 1 : return 0;
+        }
+    }
+    elsif ($cl) {
+        if ($cu) {
+            ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl) ? return 1 : return 0;
+        } else {
+            ($$data{ci_95} <= $cl) ? return 1 : return 0;
+        }
     } else {
         return 1;
     }
