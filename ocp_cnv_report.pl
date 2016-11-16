@@ -24,7 +24,7 @@ use constant DEBUG => 1;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.1.0_111516";
+my $version = "v3.1.1_111616";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls. Also can output
@@ -45,10 +45,10 @@ USAGE: $scriptname [options] <VCF_file(s)>
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
-    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty print (as 'pp').  DEFAULT: pp. This format
-                      Still retains the header and whatnot.
-    -r, --raw         Output as a raw CSV format that can be input into Excel.  The header output is not in columns as a part of the
-                      whole.
+    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty print (as 'pp').  DEFAULT: pp. 
+                      This format still retains the header and other data.
+    -r, --raw         Output as a raw CSV format that can be input into Excel.  The header output is not in columns as 
+                      a part of the whole.
     -v, --version     Version information
     -h, --help        Print this help information
 EOT
@@ -116,10 +116,15 @@ if (DEBUG) {
     print "Filters being employed\n";
     while (my ($keys, $values) = each %filters) {
         $values //= 'undef';
-        printf "\t%-7s => %s\n",$keys,$values;
+        if ($keys eq 'gene') {
+            printf "\t%-7s => %s\n",$keys,join(',',@$values);
+        } else {
+            printf "\t%-7s => %s\n",$keys,$values;
+        }
     }
     print '='x79, "\n";
 }
+
 my %formats = (
     'csv'   => ',',
     'tsv'   => "\t",
@@ -264,14 +269,17 @@ sub filter_results {
     #       making it think there is a positive result.  We need to fix these filter chains to prevent this
     #       kind of thing from happening.
     my ($data, $filters) = @_;
+    #dd $filters;
     my @cn_thresholds = @$filters{qw(cn cu cl)};
 
     # Filter non-hotspots and novel if we don't want them.
     if ($$data{HS} eq 'No' || $$data{gene} eq '.') {
-        return;
-        #return return_data($data) unless $$filters{novel} and copy_number_filter($data, \@cn_thresholds);
+        if ($$filters{novel}) {
+            return return_data($data) if copy_number_filter($data, \@cn_thresholds);
+        }
     }
-
+    
+    dd $data;
     # Number of tiles filter
     return if ($$filters{tiles} and $$data{NUMTILES} < $$filters{tiles});
 
@@ -305,22 +313,29 @@ sub copy_number_filter {
     no warnings;
     my ($data, $threshold) = @_;
     my ($cn, $cu, $cl) = @$threshold;
+    #dd $threshold;
+    #exit;
 
     if ($cn) {
-        ($$data{CN} >= $cn) ? return 1 : return 0;
+        #print "got to 'cu' filter!\n";
+        ($$data{CN} >= $cn) ? return 1 : return -1;
     }
     elsif ($cu) {
+
+        #print "got to 'cu' filter!\n";
         if ($cl) {
             ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl) ? return 1 : return 0;
         } else {
-            ($$data{ci_05} >= $cu) ? return 1 : return 0;
+            #print "got here\n";
+            ($$data{ci_05} >= $cu) ? return 1 : return -1;
         }
     }
     elsif ($cl) {
+        #print "got to 'cl' filter!\n";
         if ($cu) {
-            ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl) ? return 1 : return 0;
+            ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl) ? return 1 : return -1;
         } else {
-            ($$data{ci_95} <= $cl) ? return 1 : return 0;
+            ($$data{ci_95} <= $cl) ? return 1 : return -1;
         }
     } else {
         return 1;
