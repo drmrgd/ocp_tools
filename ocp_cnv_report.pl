@@ -14,7 +14,7 @@ use Parallel::ForkManager;
 use Data::Dump;
 use Term::ANSIColor;
 
-use constant DEBUG => 1;
+use constant DEBUG => 0;
 
 # Remove when in prod.
 #print "\n";
@@ -24,7 +24,7 @@ use constant DEBUG => 1;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.1.2_111616";
+my $version = "v3.2.0_111716";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls. Also can output
@@ -193,7 +193,6 @@ for my $sample ( keys %cnv_data ) {
         my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/; 
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
         %mapped_cnv_data = map{ $_ => $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
-        #@mapped_cnv_data{qw(ci_05 ci_95)} = ($ci_5,$ci_95);
         @mapped_cnv_data{qw(ci_05 ci_95)} = (sprintf("%.2f",$ci_5),sprintf("%.2f",$ci_95));
         @mapped_cnv_data{qw(chr start gene undef)} = split(/:/, $cnv);
         $mapped_cnv_data{HS} //= 'No';
@@ -218,9 +217,6 @@ for my $sample ( keys %cnv_data ) {
         push(@{$results{$sample}}, \@filtered_data) if @filtered_data;
     }
 }
-# XXX
-#dd \%results;
-#exit;
 print_results(\%results, $delimiter);
 
 sub print_results {
