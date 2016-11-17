@@ -24,7 +24,7 @@ use constant DEBUG => 0;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v3.0.0_090216";
+my $version = "v3.2.0_111716";
 my $description = <<"EOT";
 Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
 called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls. Also can output
@@ -45,10 +45,10 @@ USAGE: $scriptname [options] <VCF_file(s)>
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
-    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty print (as 'pp').  DEFAULT: pp. This format
-                      Still retains the header and whatnot.
-    -r, --raw         Output as a raw CSV format that can be input into Excel.  The header output is not in columns as a part of the
-                      whole.
+    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty print (as 'pp').  DEFAULT: pp. 
+                      This format still retains the header and other data.
+    -r, --raw         Output as a raw CSV format that can be input into Excel.  The header output is not in columns as 
+                      a part of the whole.
     -v, --version     Version information
     -h, --help        Print this help information
 EOT
@@ -116,10 +116,15 @@ if (DEBUG) {
     print "Filters being employed\n";
     while (my ($keys, $values) = each %filters) {
         $values //= 'undef';
-        printf "\t%-7s => %s\n",$keys,$values;
+        if ($keys eq 'gene') {
+            printf "\t%-7s => %s\n",$keys,join(',',@$values);
+        } else {
+            printf "\t%-7s => %s\n",$keys,$values;
+        }
     }
     print '='x79, "\n";
 }
+
 my %formats = (
     'csv'   => ',',
     'tsv'   => "\t",
@@ -188,7 +193,7 @@ for my $sample ( keys %cnv_data ) {
         my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/; 
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
         %mapped_cnv_data = map{ $_ => $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
-        @mapped_cnv_data{qw(ci_05 ci_95)} = ($ci_5,$ci_95);
+        @mapped_cnv_data{qw(ci_05 ci_95)} = (sprintf("%.2f",$ci_5),sprintf("%.2f",$ci_95));
         @mapped_cnv_data{qw(chr start gene undef)} = split(/:/, $cnv);
         $mapped_cnv_data{HS} //= 'No';
         $mapped_cnv_data{ci_05} //= 0;
@@ -221,6 +226,7 @@ sub print_results {
 
     select $out_fh;
 
+    # Print out comma separated dataset for easy import into Excel and whatnot.
     raw_output($data) if $raw_output;
 
     for my $sample (keys %$data) {
@@ -255,34 +261,29 @@ sub raw_output {
 }
 
 sub filter_results {
+    # Filter out CNV data prior to printing it all out.
     my ($data, $filters) = @_;
-    my @cn_thresholds = $$filters{qw(cn cu cl)};
+    my @cn_thresholds = @$filters{qw(cn cu cl)};
+
+    # Gene level filter
+    return if (@{$filters{gene}}) and ! grep {$$data{gene} eq $_} @{$filters{gene}};
 
     # Filter non-hotspots and novel if we don't want them.
-    if ($$data{HS} eq 'No' || $$data{gene} eq '.') {
-        return unless $$filters{novel};
-    }
+    return if ! $$filters{novel} and ($$data{HS} eq 'No' || $$data{gene} eq '.');
 
     # Number of tiles filter
     return if ($$filters{tiles} and $$data{NUMTILES} < $$filters{tiles});
 
     # OVAT Filter
     return if ($$filters{annot} and $$data{GC} eq '---');
-
-    # Gene level filter
-    if (@{$filters{gene}}) {
-        unless ( grep { $$data{gene} eq uc($_) } @{$$filters{gene}} ) {
-            return;
-        } 
-    }
-
-    # We made it the whole way through; check for copy number thresholds.
-    return return_data($data) if copy_number_filter($data, \@cn_thresholds);
+    
+    # We made it the whole way through; check for copy number thresholds
+    (copy_number_filter($data, \@cn_thresholds)) ? return return_data($data) : return;
 }
 
 sub return_data {
     my $data = shift;
-    my @fields = qw( chr gene start END LEN NUMTILES RAW_CN REF_CN ci_05 ci_95 CN GC);
+    my @fields = qw(chr gene start END LEN NUMTILES RAW_CN REF_CN ci_05 ci_95 CN GC);
     return @$data{@fields};
 }
 
@@ -292,14 +293,21 @@ sub copy_number_filter {
     my ($data, $threshold) = @_;
     my ($cn, $cu, $cl) = @$threshold;
 
-    if ($cu and $cl) {
-        ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl) ? return 1 : return 0;
-    } 
-    elsif ($cn) {
-        ($$data{cn} >= $cn) ? return 1 : return 0;
+    if ($cn) {
+        return 1 if ($$data{CN} >= $cn);
+    }
+    elsif ($cu) {
+        return 1 if $cl and ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl);
+        return 1 if ($$data{ci_05} >= $cu);
+    }
+    elsif ($cl) {
+        return 1 if $cu and ($$data{ci_05} >= $cu || $$data{ci_95} <= $cl);
+        return 1 if ($$data{ci_95} <= $cl);
     } else {
+        # Return everything if there are no filters.
         return 1;
     }
+    return 0;
 }
 
 sub proc_vcf {

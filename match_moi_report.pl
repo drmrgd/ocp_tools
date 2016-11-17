@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.6.2_090816";
+my $version = "v4.6.3_111716";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -116,9 +116,6 @@ for my $prog (@required_programs) {
     die "ERROR: '$prog' is required, but not found in your path!\n" unless qx(which $prog);
 }
 
-#warn "NOTE: Using old CN method, which will be fully replaced with 5% and 95% confidence interval analysis soon!\n" unless ($cn_upper_cutoff && $cn_lower_cutoff);
-print "NOTE: Using old CN method, which will be fully replaced with 5% and 95% confidence interval analysis soon!\n" unless ($cn_upper_cutoff && $cn_lower_cutoff);
-
 ########------------------------------ END ARG Parsing ---------------------------------#########
 my $vcf_file = shift;
 die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e $vcf_file;
@@ -207,10 +204,10 @@ sub proc_snv_indel {
             # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
             elsif ( $gene eq 'EGFR' ) { 
                 if ( $exon == 19 && $function eq 'nonframeshiftDeletion' ) {
-                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftDeletion in Exon 20');
+                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftDeletion in Exon 19');
                 }
                 elsif ($exon == 20 && $function eq 'nonframeshiftInsertion') {
-                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 19');
+                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 20');
                 }
             }
             # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
@@ -223,8 +220,6 @@ sub proc_snv_indel {
             }
         }
     }
-    #dd \%results;
-    #exit;
     return \%results;
 }
 sub gen_var_entry {
@@ -239,7 +234,6 @@ sub proc_fusion {
 
     my $cmd;
     ($nocall) ? ($cmd = qq(ocp_fusion_report.pl -N $$vcf_file)) : ($cmd = qq(ocp_fusion_report.pl $$vcf_file));
-    #open(my $vcf_data, '-|', "ocp_fusion_report.pl $$vcf_file") or die "ERROR: Can't parse VCF file for fusions!";
     open(my $vcf_data, '-|', $cmd) or die "ERROR: Can't parse VCF file for fusions!";
     while (<$vcf_data>) {
         # Skip header and blank lines
@@ -249,7 +243,6 @@ sub proc_fusion {
         # Unifying the fusion threshold for both inter and intra-genic fusions now.
         next if $fields[2] < $read_count;
 
-        #my $fid = join( '|', $pair, $junct, $id );
         $fields[0] =~ s/\./|/;
         $results{"$fields[0]|$fields[1]"} = {
             'DRIVER'   => $fields[3],
@@ -262,7 +255,6 @@ sub proc_fusion {
     my ($mapped_reads) = map { /^##TotalMappedFusionPanelReads=(\d+)/ }<$fh>;
     close $fh;
     $results{'MAPPED_RNA'} = $mapped_reads;
-
     return \%results;
 }
 
@@ -271,7 +263,6 @@ sub proc_ipc {
     my $vcf_file = shift;
     my $assay_version = shift;
     my $cmd = "ocp_control_summary.pl $$vcf_file";
-    #$cmd .= " -O" if $$assay_version eq 'ocp';
     $cmd .= " -m 1" if $$assay_version eq 'ocp';
 
     open( my $vcf_data, '-|', $cmd ) || die "ERROR: Can't parse the expression control data";
@@ -287,7 +278,6 @@ sub proc_cnv {
 
     my $cmd; 
     ($nocall) ? ($cmd = qq(ocp_cnv_report.pl -N $$vcf_file)) : ($cmd = qq(ocp_cnv_report.pl $$vcf_file));
-    #open(my $vcf_data, '-|', "ocp_cnv_report.pl $$vcf_file");
     open(my $vcf_data, '-|', $cmd);
     while (<$vcf_data>) {
         if (/^:::/) {
@@ -298,9 +288,6 @@ sub proc_cnv {
             my $ci_05 = $fields[8];
             my $ci_95 = $fields[9];
             my $cn = $fields[10];
-            # XXX: 
-            #     Set CNV cutoff here with either 5% CI val and threshold or CN val and threshold
-            #     Try to setup reporting of both amplifications and deletions (95% CI < 1).
             if ($cn_upper_cutoff && $cn_lower_cutoff) {
                 if ($ci_05 >= $cn_upper_cutoff || $ci_95 <= $cn_lower_cutoff) {
                     $results{$fields[1]} = [@fields[0,5,8,10,9]];
@@ -369,6 +356,9 @@ sub raw_output {
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
     my $mapd = $$cnv_data{'META'}[2];
     select $out_fh;
+    #dd $snv_indels;
+    #dd $fusion_data;
+    #dd $cnv_data;
 
     for my $var (sort{ versioncmp( $a, $b ) } keys %$snv_indels) {
         print join(',', 'SNV', @{$$snv_indels{$var}}), "\n";
@@ -442,18 +432,17 @@ sub gen_report {
         print_msg( "$cnv_param_string $cn_cutoff) :::\n", "ansi3");
     }
 
-    my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
     print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
+
     if ( %$cnv_data ) {
         for my $cnv ( sort{ versioncmp( $$cnv_data{$a}->[0], $$cnv_data{$b}->[0] ) } keys %$cnv_data ) {
-            #print_msg(sprintf($cnv_format, $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
-            print_msg(sprintf('%-9s %-10s %-6s %-10.3f ', $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1,2]));
-            my @formatted_copy_number = sprintf('%-10.1f ', $$cnv_data{$cnv}[3]);
+            print_msg(sprintf('%-9s %-10s %-6s %-10.2f ', $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1,2]));
+            my @formatted_copy_number = sprintf('%-10.2f ', $$cnv_data{$cnv}[3]);
             ($$cnv_data{$cnv}[3] < 1) ? 
                 push(@formatted_copy_number,'bold red on_black') : push(@formatted_copy_number,'bold green on_black');
             print_msg(@formatted_copy_number);
-            print_msg(sprintf("%-10.3f\n", $$cnv_data{$cnv}[4]));
+            print_msg(sprintf("%-10.2f\n", $$cnv_data{$cnv}[4]));
         }
     } else {
         print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
@@ -471,16 +460,12 @@ sub gen_report {
     my @read_count;
     my $commified_reads = commify($tot_rna_reads);
     ($tot_rna_reads < 100000) ? 
-        #(@read_count = ("**$tot_rna_reads**", 'bold red on_black')) : 
-        #(@read_count = ($tot_rna_reads,'ansi3')); 
         (@read_count = ("**$commified_reads**", 'bold red on_black')) : 
         (@read_count = ($commified_reads,'ansi3')); 
 
     my @ipc_output;
     $commified_reads = commify($ipc_reads);
     ($ipc_reads < 20000) ? 
-        #(@ipc_output = ("**$ipc_reads**", 'bold red on_black')) : 
-        #(@ipc_output = ($ipc_reads, 'ansi3'));
         (@ipc_output = ("**$commified_reads**", 'bold red on_black')) : 
         (@ipc_output = ($commified_reads, 'ansi3'));
 
