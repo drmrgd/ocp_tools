@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.6.1_100416";
+my $version = "v4.6.2_111716";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -296,9 +296,6 @@ sub proc_cnv {
             my $ci_05 = $fields[8];
             my $ci_95 = $fields[9];
             my $cn = $fields[10];
-            # XXX: 
-            #     Set CNV cutoff here with either 5% CI val and threshold or CN val and threshold
-            #     Try to setup reporting of both amplifications and deletions (95% CI < 1).
             if ($cn_upper_cutoff && $cn_lower_cutoff) {
                 if ($ci_05 >= $cn_upper_cutoff || $ci_95 <= $cn_lower_cutoff) {
                     $results{$fields[1]} = [@fields[0,5,8,10,9]];
@@ -367,10 +364,9 @@ sub raw_output {
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
     my $mapd = $$cnv_data{'META'}[2];
     select $out_fh;
-    dd $snv_indels;
-    dd $fusion_data;
-    dd $cnv_data;
-    
+    #dd $snv_indels;
+    #dd $fusion_data;
+    #dd $cnv_data;
 
     for my $var (sort{ versioncmp( $a, $b ) } keys %$snv_indels) {
         print join(',', 'SNV', @{$$snv_indels{$var}}), "\n";
@@ -444,18 +440,17 @@ sub gen_report {
         print_msg( "$cnv_param_string $cn_cutoff) :::\n", "ansi3");
     }
 
-    my $cnv_format = "%-9s %-10s %-6s %-10.3f %-10.1f %-10.3f\n";
     my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
     print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
+
     if ( %$cnv_data ) {
         for my $cnv ( sort{ versioncmp( $$cnv_data{$a}->[0], $$cnv_data{$b}->[0] ) } keys %$cnv_data ) {
-            #print_msg(sprintf($cnv_format, $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1..4]));
-            print_msg(sprintf('%-9s %-10s %-6s %-10.3f ', $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1,2]));
-            my @formatted_copy_number = sprintf('%-10.1f ', $$cnv_data{$cnv}[3]);
+            print_msg(sprintf('%-9s %-10s %-6s %-10.2f ', $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1,2]));
+            my @formatted_copy_number = sprintf('%-10.2f ', $$cnv_data{$cnv}[3]);
             ($$cnv_data{$cnv}[3] < 1) ? 
                 push(@formatted_copy_number,'bold red on_black') : push(@formatted_copy_number,'bold green on_black');
             print_msg(@formatted_copy_number);
-            print_msg(sprintf("%-10.3f\n", $$cnv_data{$cnv}[4]));
+            print_msg(sprintf("%-10.2f\n", $$cnv_data{$cnv}[4]));
         }
     } else {
         print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
@@ -473,16 +468,12 @@ sub gen_report {
     my @read_count;
     my $commified_reads = commify($tot_rna_reads);
     ($tot_rna_reads < 100000) ? 
-        #(@read_count = ("**$tot_rna_reads**", 'bold red on_black')) : 
-        #(@read_count = ($tot_rna_reads,'ansi3')); 
         (@read_count = ("**$commified_reads**", 'bold red on_black')) : 
         (@read_count = ($commified_reads,'ansi3')); 
 
     my @ipc_output;
     $commified_reads = commify($ipc_reads);
     ($ipc_reads < 20000) ? 
-        #(@ipc_output = ("**$ipc_reads**", 'bold red on_black')) : 
-        #(@ipc_output = ($ipc_reads, 'ansi3'));
         (@ipc_output = ("**$commified_reads**", 'bold red on_black')) : 
         (@ipc_output = ($commified_reads, 'ansi3'));
 
