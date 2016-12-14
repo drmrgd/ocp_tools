@@ -1,6 +1,4 @@
 #!/usr/bin/python
-# 
-###############################################################################################
 import sys
 import os
 import re
@@ -11,7 +9,7 @@ import fnmatch
 from time import sleep
 from pprint import pprint
 
-version = '1.5.1_101916'
+version = '1.6.1_121416'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -44,22 +42,22 @@ def get_args():
 
     dna_bam = args.dna_bam
     if not os.path.isfile(dna_bam):
-        print "ERROR: '%s' does not exist!" % dna_bam
+        sys.stderr.write("ERROR: '%s' does not exist!\n" % dna_bam)
         sys.exit(1)
         
     rna_bam = args.rna_bam
     if not os.path.isfile(rna_bam):
-        print "ERROR: '%s' does not exist!" % rna_bam
+        sys.stderr.write("ERROR: '%s' does not exist!\n" % rna_bam)
         sys.exit(1)
 
     match=re.search('(PSN)([0-9]+$)', psn)
     if not match:
-        print "ERROR: '%s' is not a valid PSN!" % psn
+        sys.stderr.write("ERROR: '%s' is not a valid PSN!\n" % psn)
         sys.exit(1)
 
     match=re.search('(MSN)([0-9]+)$', msn)
     if not match:
-        print "ERROR: '%s' is not a valid MSN!" % msn
+        sys.stderr.write("ERROR: '%s' is not a valid MSN!\n" % msn)
         sys.exit(1)
 
     if args.analysis_id:
@@ -72,7 +70,7 @@ def get_args():
     if args.token:
         token = args.token
     if not os.path.exists(token):
-        print "ERROR: The IR token file '%s' can not be found! You might need to load a custom token with the '-t' option." % token
+        sys.stderr.write("ERROR: The IR token file '%s' can not be found! You might need to load a custom token with the '-t' option.\n" % token)
         sys.exit(1)
 
     return (dna_bam, rna_bam, psn, msn, site, run_id, token)
@@ -81,18 +79,17 @@ def gen_wd(psn,msn):
     new_dir = psn +'_'+ msn +'_variant_reports'
 
     if os.path.isdir(new_dir):
-        print "WARN: Directory '%s' already exists!" % new_dir,
+        sys.stderr.write("WARN: Directory '%s' already exists!" % new_dir)
         choice = user_query(' Overwrite current data?')
         if not choice:
-            print "Exiting so we don't overwrite old data! You should move old data to a new directory and try again."
+            sys.stdout.write("Exiting so we don't overwrite old data! You should move old data to a new directory and try again.\n")
             sys.exit(1)
         else:
-            print "Revoming old directory to make room for new data."
+            sys.stdout.write("Revoming old directory to make room for new data.\n")
             shutil.rmtree(new_dir)
 
-    print "Making new directory to store data: %s." % new_dir
+    sys.stdout.write("Making new directory to store data: %s.\n" % new_dir)
     os.mkdir(new_dir)
-
     return new_dir
 
 def user_query(query, default='no'):
@@ -116,47 +113,52 @@ def user_query(query, default='no'):
         elif choice in valid:
             return valid[choice]
         else:
-            sys.stdout.write("Invalid choice '%s'! Please enter 'y' or 'n'." % choice)
+            sys.stderr.write("Invalid choice '%s'! Please enter 'y' or 'n'." % choice)
 
 def validate_bams(msn, bam, na_type):
     '''Validate the BAM files passed into the script, and if OK, get a new file name, get analysis ID, and index them'''
     # match = re.search('^.*?(MSN\d+_.*?_[cv]\d+_.*)_([dr]na).bam', bam)
-    match = re.search('^.*?(MSN\d+_[cv]\d+_.*)_([dr]na).bam', bam)
+    # match = re.search('^.*?(MSN\d+_[cv]\d+_.*)_([dr]na).bam', bam)
+    match = re.search('^.*?(MSN\d+_(?:[DR]NA_)?[cv]\d+_.*)_([dr]na).bam', bam)
+    try:
+        sample = match.group(2)
+    except AttributeError:
+        sys.stderr.write("ERROR: BAM file '%s' does not have valid MSN nomenclature and can not be processed.\n" % bam)
+        sys.exit(1) 
 
-    sample = match.group(2)
     if sample != na_type:
-        print "ERROR: Expecting a %s file, but got file %s instead.  Check the file name and / or order!" % (na_type, bam)
+        sys.stderr.write("ERROR: Expecting a %s file, but got file %s instead.  Check the file name and / or order!\n" % (na_type, bam))
         sys.exit(1)
 
     analysis_id = match.group(1)
     elems = analysis_id.split('_')
     if elems[0] != msn:
-        print "ERROR: the MSN '%s' does not agree with the MSN in the %s BAM file '%s'!" % (msn, na_type, bam)
+        sys.stderr.write("ERROR: the MSN '%s' does not agree with the MSN in the %s BAM file '%s'!\n" % (msn, na_type, bam))
         sys.exit(1)
 
     new_file_name = analysis_id + '_' + sample + '.bam'
     
-    print "\tStripping off extra prefix from %s file if exists..." % na_type.upper(),
+    sys.stdout.write("\tStripping off extra prefix from %s file if exists..." % na_type.upper())
     os.rename(bam, new_file_name)
-    print "Done!"
+    sys.stdout.write("Done!\n")
 
-    print "\tIndexing %s BAM file..." % na_type.upper(),
+    sys.stdout.write("\tIndexing %s BAM file..." % na_type.upper())
     p = subprocess.Popen(['samtools','index', new_file_name], stdout=subprocess.PIPE)
     p.communicate()
-    print "Done!"
+    sys.stdout.write("Done!\n")
 
     return (new_file_name, analysis_id)
 
 def get_ir_data(analysis_id, token):
     '''Use ir_api_retrieve and extract_ir_data to get IR data for review'''
 
-    print 'Getting data from IR for analysis ID {}...'.format(analysis_id)
+    sys.stdout.write('Getting data from IR for analysis ID {}...'.format(analysis_id))
     count = 1
     while count:
         p = subprocess.Popen(['ir_api_retrieve.py', '-H','nci', '-t', token, analysis_id],stdout=subprocess.PIPE,stderr=subprocess.PIPE) 
         result,error = p.communicate()
         if p.returncode != 0:
-            sys.stderr.write("Error retrieving data: {}".format(error))
+            sys.stderr.write("\nError retrieving data: {}\n".format(error))
             if count == 3:
                 sys.stderr.write('\nERROR: Can not retrieve data from IR server. Max attempts reached (3).  Check the connection and try again!\n')
                 sys.exit(1)
@@ -165,30 +167,26 @@ def get_ir_data(analysis_id, token):
             count += 1
         else:
             break
-    print 'Done!'
+    sys.stdout.write('Done!\n')
 
-    print "Extracting IR results...",
+    sys.stdout.write("Extracting IR results...")
     p = subprocess.Popen('extract_ir_data.sh', stdout=subprocess.PIPE)
     p.communicate()
-    print "Done!"
-
-    return
+    sys.stdout.write("Done!\n")
 
 def gen_moi_report(msn,vcf):
     filename = msn + '_MATCH_MOI_Report.txt'
 
-    print "Generating a MATCH MOI Report for {}...".format(msn),
-    # p=subprocess.Popen(['match_moi_report.pl', '-o', filename, vcf], stdout=subprocess.PIPE)
+    sys.stdout.write("Generating a MATCH MOI Report for {}...".format(msn))
     p=subprocess.Popen(['match_moi_report.pl', '--cu', '4', '--cl', '1', '-o', filename, vcf], stdout=subprocess.PIPE)
     result,error = p.communicate()
-    print "Done!\n"
-    print result.decode('ascii')
-    return
+    sys.stdout.write("Done!\n")
+    sys.stdout.write(result.decode('ascii'))
 
 def main():
     (dna_bam, rna_bam, psn, msn, site, analysis_id, token) = get_args()
 
-    print "Validating DNA and RNA BAM files..."
+    sys.stdout.write("Validating DNA and RNA BAM files...\n")
     (new_dna_bam, dna_run_id) = validate_bams(msn, dna_bam, 'dna')
     (new_rna_bam, rna_run_id) = validate_bams(msn, rna_bam, 'rna')
 
@@ -205,7 +203,8 @@ def main():
         if dna_run_id == rna_run_id:
             analysis_id = dna_run_id
         else:
-            print "ERROR: DNA and RNA Analysis IDs do not agree!\n\tDNA: %s\n\tRNA: %s" % (dna_run_id, rna_run_id)
+            sys.stderr.write("ERROR: DNA and RNA Analysis IDs do not agree!\n")
+            sys.stderr.write("\tDNA: %s\n\tRNA: %s" % (dna_run_id, rna_run_id))
             sys.exit(1)
     get_ir_data(analysis_id, token)
 
@@ -218,7 +217,7 @@ def main():
     # Generate a MOI report and store it.
     gen_moi_report(msn,'vcfs/' + vcf)
 
-    print 'Report generation complete.  Results can be found in {}.'.format(os.getcwd())
+    sys.stdout.write('\nReport generation complete.  Results can be found in {}.\n'.format(os.getcwd()))
 
 if __name__ == '__main__':
     main()
