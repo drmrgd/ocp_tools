@@ -68,12 +68,12 @@ def get_args():
         run_id = ''
 
     # Check for and hand the IR token file.
-    token = os.environ['HOME'] + '/Dropbox/ir_stuff/ir_token'
+    token = os.environ['HOME'] + 'Dropbox/ir_stuff/ir_token'
     if args.token:
-        token = os.path.abspath(args.token)
-    if not os.path.exists(token):
-        print "ERROR: The IR token file '%s' can not be found! You might need to load a custom token with the '-t' option." % token
-        sys.exit(1)
+        token = args.token
+        if not os.path.exists(token):
+            print "ERROR: The IR token file '%s' can not be found! You might need to load a custom token with the '-t' option." % token
+            sys.exit(1)
 
     return (dna_bam, rna_bam, psn, msn, site, run_id, token)
 
@@ -147,17 +147,13 @@ def validate_bams(msn, bam, na_type):
 
     return (new_file_name, analysis_id)
 
-def get_ir_data(analysis_id, site, token):
+def get_ir_data(analysis_id, token):
     '''Use ir_api_retrieve and extract_ir_data to get IR data for review'''
 
-    # TODO:
     print 'Getting data from IR for analysis ID {}...'.format(analysis_id)
-    cmd = 'ir_api_retrieve.py -H {} -t {} {}'.format(site,token,analysis_id)
-    print cmd
-
     count = 1
     while count:
-        p = subprocess.Popen(['ir_api_retrieve.py', '-H', 'nci', '-t', token, analysis_id],stdout=subprocess.PIPE,stderr=subprocess.PIPE) 
+        p = subprocess.Popen(['ir_api_retrieve.py', '-H','nci', '-t', token, analysis_id],stdout=subprocess.PIPE,stderr=subprocess.PIPE) 
         result,error = p.communicate()
         if p.returncode != 0:
             sys.stderr.write("Error retrieving data: {}".format(error))
@@ -210,7 +206,7 @@ def main():
         else:
             print "ERROR: DNA and RNA Analysis IDs do not agree!\n\tDNA: %s\n\tRNA: %s" % (dna_run_id, rna_run_id)
             sys.exit(1)
-    get_ir_data(analysis_id, site, token)
+    get_ir_data(analysis_id, token)
 
     # Get the VCF file for processing.
     files = os.listdir('vcfs')
