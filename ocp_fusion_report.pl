@@ -14,7 +14,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.9.0_060216";
+my $version = "v2.1.0_121516";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -23,9 +23,10 @@ EOT
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <vcf_file(s)>
     -R, --Ref       Include reference variants too (DEFAULT: OFF).
-    -n, --novel     Include 'Non-Targeted' fusions in the output (DEFAULT: ON).
+    -n, --novel     Include 'Non-Targeted' fusions in the output (DEFAULT: OFF).
     -t, --threshold Only report fusions above this threshold (DEFAULT: 25).
-    -g, --gene      Only output data for a specific driver gene or genes separated by a comma.
+    -g, --gene      Only output data for a specific driver gene or genes separated by a comma. 
+    -N, --NOCALL    Don't report NOCALL or FAIL Fusions.
     -r, --raw       Raw output rather that pretty printed file.
     -o, --output    Write output to file.
     -v, --version   Display version information.
@@ -40,6 +41,7 @@ my $ref_calls;
 my $gene;
 my $threshold = 25;
 my $raw_output;
+my $nocall;
 
 GetOptions( 
     "Ref|R"         => \$ref_calls,
@@ -48,6 +50,7 @@ GetOptions(
     "gene|g=s"      => \$gene,
     "output|o=s"    => \$outfile,
     "raw|r"         => \$raw_output,
+    "NOCALL|N"      => \$nocall,
     "help|h"        => \$help,
     "version|v"     => \$ver_info,
 );
@@ -81,7 +84,7 @@ if ( $outfile ) {
 }
 
 my $novel;
-($novel_filter) ? ($novel = 0) : ($novel = 1);
+($novel_filter) ? ($novel = 1) : ($novel = 0);
 
 my @files = @ARGV;
 my @genes_list = map{uc($_)} split(/,/, $gene) if $gene;
@@ -100,14 +103,25 @@ for my $input_file ( @files ) {
     while (<$in_fh>) {
         next if /^#/;
         my @data = split;
+
+        # Get rid of FAIL and NOCALL calls to be more compatible with MATCHBox output. Filtering prior to 
+        # Fusion filter to speed up a little.
+        next if $nocall && ($data[6] eq 'FAIL' || $data[6] eq 'NOCALL');
         if ( grep { /Fusion/ } @data ) {
+            #dd \@data if grep { $_ =~ /EGFR/ } @data;
             my ( $name, $elem ) = $data[2] =~ /(.*?)_([12])$/;
             my ($count) = map { /READ_COUNT=(\d+)/ } @data;
+            #print join("\n", "\tname: $name\n\telem: $elem\n\tcount: $count\n");
             
+            #next unless $name =~ /EGFR/;
             my ($pair, $junct, $id) = split(/\./, $name);
             $id //= '-';
-            next if ($id eq 'Non-Targeted' && ! $novel);
+            #next if (! $novel and $id eq 'Non-Targeted');
+            if ($id eq 'Non-Targeted') {
+                next unless $novel;
+            }
 
+            #print join("\n", "\tpair: $pair\n\tjunct: $junct\n\tid: $id\n\n");
             my ($gene1, $gene2) = split(/-/, $pair);
 
             # Filter out ref calls if we don't want to view them
@@ -163,7 +177,6 @@ for my $sample ( sort keys %results ) {
             next if $results{$sample}->{$entry}->{'COUNT'} < $threshold && ! $ref_calls;
             print_data(\$sample, "$fusion.$junct", \$id, $results{$sample}->{$entry}, \$fusion_format);
         }
-        #print "\n";
     } else {
         print "\t\t\t<<< No Fusions Detected >>>\n\n" unless $raw_output;
     }

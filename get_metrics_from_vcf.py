@@ -8,15 +8,16 @@ import sys
 import os
 import re
 import subprocess
-from pprint import pprint
+import datetime
+from pprint import pprint as pp
 
-
-version = '2.0.0_060816'
+version = '2.1.0_121416'
 
 def read_vcf(vcf_file):
     mapd_value = ''
     tot_rna_reads = ''
     expr_sum = 0
+    date = ''
 
     with open(vcf_file) as fh:
         for line in fh:
@@ -28,8 +29,13 @@ def read_vcf(vcf_file):
             elif re.search('SVTYPE=ExprControl',line):
                 read_count = re.search('READ_COUNT=(\d+).*',line).group(1)
                 expr_sum += int(read_count)
-    return (mapd_value,tot_rna_reads,expr_sum)
+            elif re.search('##fileDate=',line):
+                date = get_value(line.rstrip())
 
+    # Do some date formatting for easier plotting later
+    date = datetime.datetime.strptime(date,"%Y%M%d")
+    formatted_date = date.strftime("%Y-%M-%d")
+    return (mapd_value,tot_rna_reads,expr_sum,formatted_date)
 
 def get_value(line):
     return line.split('=')[1]
@@ -39,6 +45,10 @@ def get_name(vcf):
     sample_name = ''
     dna_name = ''
     rna_name = ''
+
+    # If this is MATCHBox data, we always start with 'MSN####'
+    if name_elems[0].startswith('MSN'):
+        return name_elems[0]
 
     try:
         if name_elems[0] == name_elems[2]:
@@ -67,12 +77,12 @@ def col_size(data):
     return col_width + 4
 
 def print_data(results):
-    print '{sample:{width}}{mapd:8}{rna_reads:12}{expr}'.format(
-            sample='Sample', width=col_size(results), mapd='MAPD',rna_reads='RNA_Reads',expr='Expr_Sum')
+    print('{sample:{width}}{date:12}{mapd:8}{rna_reads:12}{expr}'.format(
+        sample='Sample', width=col_size(results), date='Date', mapd='MAPD',rna_reads='RNA_Reads',expr='Expr_Sum'))
     for sample in results:
-        print '{sample:{width}}{mapd:<8}{rna_reads:<12}{expr}'.format(
-                sample=sample,width=col_size(results),mapd=results[sample][0],rna_reads=results[sample][1],expr=results[sample][2])
-    
+        print('{sample:{width}}{date:<12}{mapd:<8}{rna_reads:<12}{expr}'.format(
+            sample=sample,width=col_size(results),date=results[sample][3],mapd=results[sample][0],rna_reads=results[sample][1],expr=results[sample][2]))
+
 def main():
     try:
         vcf_files = sys.argv[1:]
