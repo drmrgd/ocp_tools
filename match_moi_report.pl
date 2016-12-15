@@ -24,7 +24,7 @@ use Data::Dump;
 #print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.6.4_121616";
+my $version = "v4.6.5_121516";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -234,7 +234,7 @@ sub proc_fusion {
     my %results;
 
     my $cmd;
-    ($nocall) ? ($cmd = qq(ocp_fusion_report.pl -N $$vcf_file)) : ($cmd = qq(ocp_fusion_report.pl $$vcf_file));
+    ($nocall) ? ($cmd = qq(ocp_fusion_report.pl -Nn $$vcf_file)) : ($cmd = qq(ocp_fusion_report.pl -n $$vcf_file));
     open(my $vcf_data, '-|', $cmd) or die "ERROR: Can't parse VCF file for fusions!";
     while (<$vcf_data>) {
         # Skip header and blank lines
