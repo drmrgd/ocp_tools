@@ -2,14 +2,23 @@
 # Get expression control data from IR Fusion output
 use warnings;
 use strict;
+use autodie;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
 use List::Util qw(max sum);
 use Data::Dump;
+use Term::ANSIColor;
+
+# Remove when in prod.
+print "\n";
+print colored("*" x 50, 'bold yellow on_black'), "\n";
+print colored("      DEVELOPMENT VERSION OF $0\n", 'bold yellow on_black');
+print colored("*" x 50, 'bold yellow on_black');
+print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v2.1.0_090116";
+my $version = "v2.2.1_011717-dev";
 my $description = <<"EOT";
 Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR. Can
 report both the internal expression control data and the 5'3'Assay data.  
@@ -72,6 +81,8 @@ my %results;
 for my $input_file ( @files ) {
     # Need to specify which depending on the panel run.
     @expr_controls = select_expr_controls(\$input_file, $match_version);
+dd \@expr_controls;
+exit;
     for my $control (@expr_controls) {
         push(@used_controls, $control) unless grep {$_ eq $control} @used_controls;
     }
@@ -173,13 +184,17 @@ for my $sample ( sort keys %results ) {
 sub select_expr_controls {
     my ($vcf,$version) = @_;
     my %expr_controls = (
-        1  => [qw( LMNA TBP MYC HMBS ITGB7 Total )],
+        0  => [qw( LMNA TBP MYC HMBS ITGB7 Total )],
         2  => [qw( LRP1 TBP MYC HMBS ITGB7 Total )],
+        3  => [qw( LRP1 TBP MYC HMBS ITGB7 MRPL13 Total )],
     );
     return @{$expr_controls{$version}} if $version;
 
     open(my $fh, "<", $$vcf);
-    my ($ovat_version) = map { /^##OncomineVariantAnnotationToolVersion=(\d\.\d)\.\d$/ } <$fh>;
+    my ($ovat_version) = map { /^##OncomineVariantAnnotationToolVersion=\d\.(\d)\.\d+$/ } <$fh>;
     close $fh;
-    ($ovat_version eq '2.0') ? return @{$expr_controls{1}} : return @{$expr_controls{2}};
+    print "version: $ovat_version\n";
+    #exit;
+    #($ovat_version eq '2.0') ? return @{$expr_controls{1}} : return @{$expr_controls{2}};
+    return @{$expr_controls{$ovat_version}};
 }
