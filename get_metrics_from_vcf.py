@@ -11,7 +11,7 @@ import subprocess
 import datetime
 from pprint import pprint as pp
 
-version = '2.1.0_121416'
+version = '2.1.1_011717'
 
 def read_vcf(vcf_file):
     mapd_value = ''
@@ -31,6 +31,7 @@ def read_vcf(vcf_file):
                 expr_sum += int(read_count)
             elif re.search('##fileDate=',line):
                 date = get_value(line.rstrip())
+                date = date.split()[0]
 
     # Do some date formatting for easier plotting later
     date = datetime.datetime.strptime(date,"%Y%M%d")
