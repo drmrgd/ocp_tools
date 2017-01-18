@@ -16,15 +16,14 @@ use Term::ANSIColor;
 use Data::Dump;
 
 # Remove when in prod.
-#print "\n";
-#print colored("*" x 50, 'bold yellow on_black'), "\n";
-#print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
-#print colored("      WARN:  \n\tCNV Threshold set to 5% CI >= 4;\n\tMETe14 threshold set to >1000\n", 'bold yellow on_black');
-#print colored("*" x 50, 'bold yellow on_black');
-#print "\n\n";
+print "\n";
+print colored("*" x 50, 'bold yellow on_black'), "\n";
+print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
+print colored("*" x 50, 'bold yellow on_black');
+print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.6.5_121516";
+my $version = "v4.7.0_011717-dev";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -35,8 +34,8 @@ USAGE: $scriptname [options] <VCF>
     -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: 5%)
     --cu         INT   Set upper bound for amplifications (DEFAULT 5% CI >= 4) 
     --cl         INT   Set lower bound for deletions (DEFAULT 95% CI <= 1) 
-    -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: 5% CI >= 4
-    -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 100 reads.
+    -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: off. 
+    -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
     -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
     -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. Due to noise NOCALL is always on in SNV / Indel space.
@@ -49,10 +48,10 @@ my $help;
 my $ver_info;
 my $outfile;
 my $freq_cutoff = 5;
-my $cn_cutoff = 4; # if set to 4, will use 5% CI.  Else will use CN as the threshold.  No need to specify.
-my $cn_upper_cutoff; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
-my $cn_lower_cutoff; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
-my $read_count = 100;
+my $cn_cutoff; # if set to 4, will use 5% CI.  Else will use CN as the threshold.  No need to specify.
+my $cn_upper_cutoff = 4; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
+my $cn_lower_cutoff = 1; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
+my $read_count = 1000;
 my $raw_output;
 my $ocp;
 my $nocall;
