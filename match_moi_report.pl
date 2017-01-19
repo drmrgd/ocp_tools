@@ -15,15 +15,16 @@ use Sort::Versions;
 use Term::ANSIColor;
 use Data::Dump;
 
-# Remove when in prod.
-print "\n";
-print colored("*" x 50, 'bold yellow on_black'), "\n";
-print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT\n", 'bold yellow on_black');
-print colored("*" x 50, 'bold yellow on_black');
-print "\n\n";
-
 my $scriptname = basename($0);
 my $version = "v4.7.1_011817-dev";
+
+# Remove when in prod.
+print "\n";
+print colored("*" x 75, 'bold yellow on_black'), "\n";
+print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT (ver: $version)\n", 'bold yellow on_black');
+print colored("*" x 75, 'bold yellow on_black');
+print "\n\n";
+
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
