@@ -23,7 +23,7 @@ print colored("*" x 50, 'bold yellow on_black');
 print "\n\n";
 
 my $scriptname = basename($0);
-my $version = "v4.7.0_011717-dev";
+my $version = "v4.7.1_011817-dev";
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
 the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
@@ -189,8 +189,11 @@ sub proc_snv_indel {
         my $ocp_vc     = $fields[15];
         my $hotspot_id = $fields[7];
         my $function   = $fields[13];
+
+        # Skip anything that does not map to an exon for now..might want to get utr vars later, though
+        next unless $fields[12] =~ /^Exon/; 
         (my $exon = $fields[12]) =~ s/Exon//;
-        next if $exon eq 'intronic';
+        #next if $exon eq 'intronic';
         
         if ( $vaf >= $freq_cutoff ) {
             # Anything that's a hotspot
