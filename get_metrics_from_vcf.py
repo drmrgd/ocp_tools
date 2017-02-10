@@ -11,7 +11,7 @@ import subprocess
 import datetime
 from pprint import pprint as pp
 
-version = '2.1.1_011717'
+version = '2.1.2_012017'
 
 def read_vcf(vcf_file):
     mapd_value = ''
@@ -61,7 +61,7 @@ def get_name(vcf):
             if not dna_name.endswith('DNA'):
                 dna_name += '-DNA'
         except:
-            # sys.stderr.write("WARN: Can not determine DNA sample name from VCF filename. Using filename instead\n")
+            #sys.stderr.write("WARN: Can not determine DNA sample name from VCF filename. Using filename instead\n")
             vcf_name = vcf.rstrip('.vcf')
 
     if dna_name and rna_name:
