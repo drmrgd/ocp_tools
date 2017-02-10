@@ -91,7 +91,7 @@ for my $input_file ( @files ) {
     (my $name = basename($input_file)) =~ s/\.vcf//;
     open( my $in_fh, "<", $input_file ) || die "Can't open the file '$input_file' for reading: $!";
     my %parsed_data;
-    my $sum = 0;
+    my ($sum, $pool1_sum, $pool2_sum) = 0;
     my $sample;
     while (<$in_fh>) {
         if (/^#CHROM/) {
@@ -107,10 +107,16 @@ for my $input_file ( @files ) {
             my ($gene, $count) = map { /GENE_NAME=(.*?);READ_COUNT=(\d+);.*/ } @data;
             $parsed_data{expr}->{$gene} = $count;
             $sum += $count;
+            if ($match_version == 3) {
+                $pool1_sum += $count if grep {$gene eq $_} qw(MYC HMBS ITGB7);
+                $pool2_sum += $count if grep {$gene eq $_} qw(LRP1 TBP MRPL13);
+            }
         }
         
         # Add in the expression control sum data
         $parsed_data{expr}->{'Total'} = $sum;
+        $parsed_data{expr}->{'Pool1'} = $pool1_sum;
+        $parsed_data{expr}->{'Pool2'} = $pool2_sum;
 
         # Add in the 5P3P Data unless we're running version 3, which eliminated the FP controls.
         if ( /5p3pAssays/ and $match_version != 3 ) {
@@ -164,14 +170,16 @@ if ($five_to_three) {
 }
 
 printf "%${top_pad}s $fpad\n", '', @fp_controls if $five_to_three;
-printf "%-${width}s$epad", 'Samples', sort @used_controls;
+#printf "%-${width}s$epad", 'Samples', sort @used_controls;
+printf "%-${width}s$epad", 'Samples', @used_controls;
 ($five_to_three) ? print "$sub_header\n" : print "\n";
 
 # Print out all control data;
 for my $sample ( sort keys %results ) {
     #printf "%-${width}s", $sample;
     printf "%-${width}s", $results{$sample}->{sample};
-    for my $control (sort @used_controls) {
+    #for my $control (sort @used_controls) {
+    for my $control (@used_controls) {
         $results{$sample}->{expr}{$control} //= 'N/A';
         printf "%-10s", $results{$sample}->{expr}{$control}
     }
@@ -190,7 +198,7 @@ sub select_expr_controls {
     my %expr_controls = (
         1  => [qw( LMNA TBP MYC HMBS ITGB7 Total )],
         2  => [qw( LRP1 TBP MYC HMBS ITGB7 Total )],
-        3  => [qw( LRP1 TBP MYC HMBS ITGB7 MRPL13 Total )],
+        3  => [qw( LRP1 TBP MYC HMBS ITGB7 MRPL13 Total Pool1 Pool2)],
     );
     return @{$expr_controls{$version}} if $version;
 
