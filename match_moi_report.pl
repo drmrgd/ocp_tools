@@ -52,7 +52,7 @@ my $freq_cutoff = 5;
 my $cn_cutoff; # if set to 4, will use 5% CI.  Else will use CN as the threshold.  No need to specify.
 my $cn_upper_cutoff = 4; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
 my $cn_lower_cutoff = 1; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
-my $read_count = 1000;
+my $read_count = 100;
 my $raw_output;
 my $ocp;
 my $nocall;
