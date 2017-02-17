@@ -14,7 +14,7 @@ from collections import defaultdict
 from pprint import pprint
 from multiprocessing.pool import ThreadPool
 
-version = '2.0.0_091516'
+version = '2.1.0_021517'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -30,11 +30,11 @@ def get_args():
     parser.add_argument('-q','--quiet', action='store_false', default=True, 
             help='Do not suppress warning and extra output')
     parser.add_argument('--cu', default=4, metavar='INT', 
-            help='Copy number threshold (5%% CI lower bound) to pass to match_moi_report for reporting amplifications.')
+            help='Copy number threshold (5%% CI lower bound) to pass to match_moi_report for reporting amplifications. DEFAULT: %(default)s')
     parser.add_argument('--cl', default=1, metavar='INT', 
-            help='Copy number threshold (95%% CI upper bound) to pass to match_moi_report for reporting copy loss.')
+            help='Copy number threshold (95%% CI upper bound) to pass to match_moi_report for reporting copy loss. DEFAULT: %(default)s')
     parser.add_argument('--reads', default=100, metavar='INT',
-            help='Threshold for number of fusion reads to report.')
+            help='Threshold for number of fusion reads to report. DEFAULT: %(default)s')
     parser.add_argument('-o','--output', help='Output to file rather than STDOUT ***NOT YET IMPLEMENTED***')
     args = parser.parse_args()
 
