@@ -16,7 +16,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v4.7.1_011817-dev";
+my $version = "v4.7.2_011817-dev";
 
 # Remove when in prod.
 print "\n";
@@ -36,9 +36,9 @@ USAGE: $scriptname [options] <VCF>
     --cu         INT   Set upper bound for amplifications (DEFAULT 5% CI >= 4) 
     --cl         INT   Set lower bound for deletions (DEFAULT 95% CI <= 1) 
     -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: off. 
-    -R, --Reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
+    -r, --reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
-    -r, --raw          Output raw data rather than pretty printed report that can be parsed with other tools
+    -R, --Raw          Output raw data rather than pretty printed report that can be parsed with other tools
     -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. Due to noise NOCALL is always on in SNV / Indel space.
     -O, --OCP          Data is MATCHv1.0 data from OCP.  Use old LRP1 data for expression control analysis.
     -v, --version      Version information
