@@ -9,7 +9,7 @@ use Data::Dump;
 use JSON;
 
 my $scriptname = basename($0);
-my $version = "v0.9.0_022717";
+my $version = "v0.9.2_022717";
 my $description = <<"EOT";
 Read in an OCAv3 VCF file and output RNA panel control data.  
 EOT
@@ -69,6 +69,7 @@ my $panel_data = $json->decode($json_text);
 # Write output to either indicated file or STDOUT
 my $out_fh;
 if ( $outfile ) {
+    print "Writing output to '$outfile'.\n";
 	open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
 } else {
 	$out_fh = \*STDOUT;
@@ -82,6 +83,7 @@ for my $vcf (@vcfs) {
 }
 
 # Print out either the raw data (i.e. data by genes) or the summary data;
+select $out_fh;
 if ($raw_output) {
     print join(',', qw(sample_name type gene pool counts)), "\n";
     for my $sample (sort keys %raw_data) {
@@ -115,6 +117,7 @@ sub read_vcf {
             next unless /SVTYPE=.*?Expr.*/;
         }
         my ($gene,$counts,$type,$pool) = parse_line(trim_line($_), $panel);
+        $pool =~ s/1,2/1-2/; # Get comma out of field for easier parsing.
         push(@{$control_data{$type}}, "$gene:$pool:$counts");
         }
     my ($ec1, $ec2) = get_sum(\%control_data, 'ExprControl');
@@ -134,7 +137,7 @@ sub get_sum {
         elsif ($pool eq 'pool2') {
             $sum2 += $count;
         }
-        elsif ($pool eq 'pool1,2') {
+        elsif ($pool eq 'pool1-2') {
             $sum1 += ($count/2);
             $sum2 += ($count/2);
         }
