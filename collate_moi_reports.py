@@ -14,7 +14,7 @@ from collections import defaultdict
 from pprint import pprint
 from multiprocessing.pool import ThreadPool
 
-version = '2.1.0_021517'
+version = '2.1.1_021517'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -60,13 +60,13 @@ def gen_moi_report(vcf,cu,cl,reads):
     '''Use MATCH MOI Reporter to generate a variant table we can parse later. Gen CLI Opts to determine
     what params to run match_moi_report with'''
     (dna,rna) = get_names(vcf)
-    moi_report_cmd = ['match_moi_report.pl', '--cu', str(cu), '--cl', str(cl), '-R', str(reads), '-r', vcf]
+    moi_report_cmd = ['match_moi_report.pl', '--cu', str(cu), '--cl', str(cl), '-r', str(reads), '-R', vcf]
     p=subprocess.Popen(moi_report_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result,error = p.communicate()
 
     if p.returncode != 0:
         sys.stderr.write("ERROR: Can not process file: {}!\n".format(vcf))
-        raise error
+        raise(error)
     else:
         return vcf, parse_data(result,dna,rna)
 
