@@ -16,7 +16,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v4.7.2_011817-dev";
+my $version = "v4.7.3_030317-dev";
 
 # Remove when in prod.
 print "\n";
@@ -123,12 +123,14 @@ die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e 
 my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
 my $fusion_data             = proc_fusion(\$vcf_file);
+my $rna_control_data        = rna_qc(\$vcf_file);
+
 my $assay_version;
 ($ocp) ? ($assay_version = 'ocp') : ($assay_version = 'matchv2.0');
 $$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file, \$assay_version);
 
 # Print out the combined report
-($raw_output) ? raw_output( $snv_indel_data, $fusion_data, $cnv_data ) : gen_report( $vcf_file, $snv_indel_data, $fusion_data, $cnv_data );
+($raw_output) ? raw_output($snv_indel_data,$fusion_data,$cnv_data,$rna_control_data) : gen_report($vcf_file,$snv_indel_data,$fusion_data,$cnv_data,$rna_control_data);
 
 sub proc_snv_indel {
     # use new VCF extractor to handle SNV and Indel calling
@@ -259,6 +261,17 @@ sub proc_fusion {
     my ($mapped_reads) = map { /^##TotalMappedFusionPanelReads=(\d+)/ }<$fh>;
     close $fh;
     $results{'MAPPED_RNA'} = $mapped_reads;
+    return \%results;
+}
+
+# XXX
+sub rna_qc {
+    my $vcf = shift;
+    my %results;
+    open(my $rna_qc_data, "-|", "match_rna_qc.pl $$vcf");
+    chomp(my $header = <$rna_qc_data>);
+    chomp(my $data   = <$rna_qc_data>);
+    @results{split(/,/,$header)} = split(/,/,$data);
     return \%results;
 }
 
