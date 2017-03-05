@@ -16,7 +16,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v4.7.3_030317-dev";
+my $version = "v4.8.0_030517-dev";
 
 # Remove when in prod.
 print "\n";
@@ -124,13 +124,19 @@ my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
 my $fusion_data             = proc_fusion(\$vcf_file);
 my $rna_control_data        = rna_qc(\$vcf_file);
+dd $rna_control_data;
 
 my $assay_version;
+# TODO:  Keep for legacy runs.  Add logic to check vcf ver.
 ($ocp) ? ($assay_version = 'ocp') : ($assay_version = 'matchv2.0');
 $$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file, \$assay_version);
 
+@$fusion_data{qw(P1_SUM P2_SUM)} = @$rna_control_data{qw(pool1_total pool2_total)};
+#dd $fusion_data;
+#exit;
+
 # Print out the combined report
-($raw_output) ? raw_output($snv_indel_data,$fusion_data,$cnv_data,$rna_control_data) : gen_report($vcf_file,$snv_indel_data,$fusion_data,$cnv_data,$rna_control_data);
+($raw_output) ? raw_output($snv_indel_data,$fusion_data,$cnv_data) : gen_report($vcf_file,$snv_indel_data,$fusion_data,$cnv_data,$rna_control_data);
 
 sub proc_snv_indel {
     # use new VCF extractor to handle SNV and Indel calling
@@ -373,9 +379,6 @@ sub raw_output {
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
     my $mapd = $$cnv_data{'META'}[2];
     select $out_fh;
-    #dd $snv_indels;
-    #dd $fusion_data;
-    #dd $cnv_data;
 
     for my $var (sort{ versioncmp( $a, $b ) } keys %$snv_indels) {
         print join(',', 'SNV', @{$$snv_indels{$var}}), "\n";
@@ -397,8 +400,8 @@ sub raw_output {
 
 sub gen_report {
     # Print out the final MOI Report
-    my ($vcf_filename, $snv_indels, $fusion_data, $cnv_data) = @_;
-    my ($w1, $w2, $w3, $w4);
+    my ($vcf_filename, $snv_indels, $fusion_data, $cnv_data,$rna_qc) = @_;
+    my ($w1, $w2, $w3, $w4, $format_string);
 
     #########################
     ##    Report Header    ##
@@ -435,12 +438,11 @@ sub gen_report {
     my ($gender, $cellularity, $mapd) = @{$$cnv_data{'META'}};
     delete $$cnv_data{'META'};
     
-    ($mapd >= 0.9 || $mapd == 0) ? 
-        (@formatted_mapd = ("**$mapd**", 'bold red on_black')) : 
-        (@formatted_mapd = ($mapd,'ansi3'));
-
+    # XXX  
     print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
-    print_msg(@formatted_mapd);
+    $format_string = format_string($mapd, '>', 0.5);
+    print_msg(@$format_string);
+
     if ($cn_upper_cutoff) {
         print_msg( ", 5% CI >= $cn_upper_cutoff, 95% CI <= $cn_lower_cutoff) :::\n", "ansi3");
     } else {
@@ -469,27 +471,33 @@ sub gen_report {
     #########################
     ##   Fusions Output    ##
     #########################
+    # XXX
     my $ipc_reads = $$fusion_data{'EXPR_CTRL'};  
     delete $$fusion_data{'EXPR_CTRL'};
     my $tot_rna_reads = $$fusion_data{'MAPPED_RNA'};
     delete $$fusion_data{'MAPPED_RNA'};
-
-    my @read_count;
-    my $commified_reads = commify($tot_rna_reads);
-    ($tot_rna_reads < 100000) ? 
-        (@read_count = ("**$commified_reads**", 'bold red on_black')) : 
-        (@read_count = ($commified_reads,'ansi3')); 
-
-    my @ipc_output;
-    $commified_reads = commify($ipc_reads);
-    ($ipc_reads < 20000) ? 
-        (@ipc_output = ("**$commified_reads**", 'bold red on_black')) : 
-        (@ipc_output = ($commified_reads, 'ansi3'));
+    my $pool1_sum = int($$fusion_data{'P1_SUM'});
+    delete $$fusion_data{'P1_SUM'};
+    my $pool2_sum = int($$fusion_data{'P2_SUM'});
+    delete $$fusion_data{'P2_SUM'};
 
     print_msg("::: MATCH Reportable Fusions (Total Mapped Reads: ",'ansi3');
-    print_msg(@read_count);
-    print_msg('; Sum Expression Control Reads: ','ansi3');
-    print_msg(@ipc_output);
+    $format_string = format_string($tot_rna_reads, '<', 100000);
+    print_msg(@$format_string);
+
+    # TODO: Print this if using v2, print pool sum if using version 3
+    print_msg('; Expression Control Sum: ','ansi3');
+    $format_string = format_string($ipc_reads, '<', 200000);
+    print_msg(@$format_string);
+
+    print_msg('; Pool1 Expression Reads: ','ansi3');
+    $format_string = format_string($pool1_sum, '<', 100000);
+    print_msg(@$format_string);
+
+    print_msg('; Pool2 Expression Reads: ','ansi3');
+    $format_string = format_string($pool2_sum, '<', 100000);
+    print_msg(@$format_string);
+
     $read_count = commify($read_count);
     print_msg( "; Threshold: $read_count) :::\n",'ansi3');
 
@@ -506,6 +514,14 @@ sub gen_report {
         print_msg(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
     }
     return;
+}
+
+sub format_string {
+    my ($string, $cmp, $threshold) = @_;
+    my $commified_string = commify($string);
+    (eval "$string $cmp $threshold")
+        ? return ["***$commified_string***", 'bold red on_black']
+        : return [$commified_string,'ansi3'];
 }
 
 sub commify {
