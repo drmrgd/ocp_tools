@@ -14,6 +14,7 @@ use File::Basename;
 use Sort::Versions;
 use Term::ANSIColor;
 use Data::Dump;
+use Sort::Versions;
 
 my $scriptname = basename($0);
 my $version = "v4.8.0_030517-dev";
@@ -75,13 +76,13 @@ sub help {
 	exit;
 }
 
-sub version {
+sub print_version {
 	printf "%s - %s\n", $scriptname, $version;
 	exit;
 }
 
 help if $help;
-version if $ver_info;
+print_version if $ver_info;
 
 # Make sure enough args passed to script
 if ( scalar( @ARGV ) < 1 ) {
@@ -120,23 +121,33 @@ for my $prog (@required_programs) {
 my $vcf_file = shift;
 die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e $vcf_file;
 
+
 my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
 my $fusion_data             = proc_fusion(\$vcf_file);
-my $rna_control_data        = rna_qc(\$vcf_file);
-dd $rna_control_data;
 
-my $assay_version;
-# TODO:  Keep for legacy runs.  Add logic to check vcf ver.
-($ocp) ? ($assay_version = 'ocp') : ($assay_version = 'matchv2.0');
-$$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file, \$assay_version);
+my $current_version = version->parse('2.3');
+my $assay_version = version->parse( vcf_version_check(\$vcf_file) );
 
-@$fusion_data{qw(P1_SUM P2_SUM)} = @$rna_control_data{qw(pool1_total pool2_total)};
-#dd $fusion_data;
-#exit;
+if ($assay_version >= $current_version) {
+    my $rna_control_data = rna_qc(\$vcf_file);
+    @$fusion_data{qw(P1_SUM P2_SUM)} = @$rna_control_data{qw(pool1_total pool2_total)};
+} else {
+    my $assay_version;
+    ($ocp) ? ($assay_version = 'ocp') : ($assay_version = 'matchv2.0');
+    $$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file, \$assay_version);
+}
 
 # Print out the combined report
-($raw_output) ? raw_output($snv_indel_data,$fusion_data,$cnv_data) : gen_report($vcf_file,$snv_indel_data,$fusion_data,$cnv_data,$rna_control_data);
+($raw_output) ? raw_output($snv_indel_data,$fusion_data,$cnv_data) : gen_report($vcf_file,$snv_indel_data,$fusion_data,$cnv_data);
+
+sub vcf_version_check {
+    my $vcf = shift;
+    open(my $vcf_fh, "<", $$vcf);
+    my ($ovat_ver) = map { /^##OncomineVariantAnnotationToolVersion=(\d+\.\d+)\.\d+/ } <$vcf_fh>;
+    return $ovat_ver;
+}
+
 
 sub proc_snv_indel {
     # use new VCF extractor to handle SNV and Indel calling
@@ -400,7 +411,7 @@ sub raw_output {
 
 sub gen_report {
     # Print out the final MOI Report
-    my ($vcf_filename, $snv_indels, $fusion_data, $cnv_data,$rna_qc) = @_;
+    my ($vcf_filename, $snv_indels, $fusion_data, $cnv_data) = @_;
     my ($w1, $w2, $w3, $w4, $format_string);
 
     #########################
@@ -472,31 +483,42 @@ sub gen_report {
     ##   Fusions Output    ##
     #########################
     # XXX
-    my $ipc_reads = $$fusion_data{'EXPR_CTRL'};  
-    delete $$fusion_data{'EXPR_CTRL'};
     my $tot_rna_reads = $$fusion_data{'MAPPED_RNA'};
     delete $$fusion_data{'MAPPED_RNA'};
-    my $pool1_sum = int($$fusion_data{'P1_SUM'});
-    delete $$fusion_data{'P1_SUM'};
-    my $pool2_sum = int($$fusion_data{'P2_SUM'});
-    delete $$fusion_data{'P2_SUM'};
+
+    my $ipc_reads;
+    if ($$fusion_data{'EXPR_CTRL'}) {
+        $ipc_reads = $$fusion_data{'EXPR_CTRL'} and delete $$fusion_data{'EXPR_CTRL'};
+    }
+    
+    my $pool1_sum;
+    if ($$fusion_data{'P1_SUM'}) {
+        $pool1_sum = int($$fusion_data{'P1_SUM'}) and delete $$fusion_data{'P1_SUM'};
+    }
+
+    my $pool2_sum;
+    if ($$fusion_data{'P2_SUM'}) {
+    $pool2_sum = int($$fusion_data{'P2_SUM'}) and delete $$fusion_data{'P2_SUM'};
+    }
 
     print_msg("::: MATCH Reportable Fusions (Total Mapped Reads: ",'ansi3');
     $format_string = format_string($tot_rna_reads, '<', 100000);
     print_msg(@$format_string);
 
-    # TODO: Print this if using v2, print pool sum if using version 3
-    print_msg('; Expression Control Sum: ','ansi3');
-    $format_string = format_string($ipc_reads, '<', 200000);
-    print_msg(@$format_string);
+    if ($ipc_reads) {
+        print_msg('; Expression Control Sum: ','ansi3');
+        $format_string = format_string($ipc_reads, '<', 200000);
+        print_msg(@$format_string);
 
-    print_msg('; Pool1 Expression Reads: ','ansi3');
-    $format_string = format_string($pool1_sum, '<', 100000);
-    print_msg(@$format_string);
+    } else {
+        print_msg('; Pool1 Expression Reads: ','ansi3');
+        $format_string = format_string($pool1_sum, '<', 100000);
+        print_msg(@$format_string);
 
-    print_msg('; Pool2 Expression Reads: ','ansi3');
-    $format_string = format_string($pool2_sum, '<', 100000);
-    print_msg(@$format_string);
+        print_msg('; Pool2 Expression Reads: ','ansi3');
+        $format_string = format_string($pool2_sum, '<', 100000);
+        print_msg(@$format_string);
+    }
 
     $read_count = commify($read_count);
     print_msg( "; Threshold: $read_count) :::\n",'ansi3');
