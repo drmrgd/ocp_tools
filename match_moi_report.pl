@@ -1,16 +1,13 @@
 #!/usr/bin/perl
 # Parse a VCF file and generate a table of MOIs and aMOIs
 #
-# TODO:
-#   - Bug!  Expression control sum < some value is being flagged as failed (look at PSN14574_MSN46185)!!
-#
 # 2/12/2014 - D Sims
 ###################################################################################################
 use warnings;
 use strict;
 use autodie;
 
-use constant DEBUG => 1;
+use constant DEBUG => 0;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
@@ -20,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v4.9.1_030617-dev";
+my $version = "v4.9.2_030617-dev";
 
 # Remove when in prod.
 print "\n";
@@ -145,7 +142,6 @@ sub vcf_version_check {
     my ($ovat_ver) = map { /^##OncomineVariantAnnotationToolVersion=(\d+\.\d+)\.\d+/ } <$vcf_fh>;
     return $ovat_ver;
 }
-
 
 sub proc_snv_indel {
     # use new VCF extractor to handle SNV and Indel calling
@@ -502,7 +498,7 @@ sub gen_report {
 
     if ($ipc_reads) {
         print_msg('; Expression Control Sum: ','ansi3');
-        $format_string = format_string($ipc_reads, '<', 200000);
+        $format_string = format_string($ipc_reads, '<', 20000);
         print_msg(@$format_string);
 
     } else {
