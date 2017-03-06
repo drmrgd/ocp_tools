@@ -13,9 +13,9 @@ import shutil
 import datetime
 import subprocess
 from pprint import pprint as pp
-from collections import defaultdict
+from collections import defaultdict,Counter
 
-version = '1.0.0_111016'
+version = '1.1.0_030617'
 cwd = os.getcwd()
 
 def get_args():
@@ -38,18 +38,36 @@ def get_args():
     args = parser.parse_args()
     return args
 
+def validate_list(samples):
+    '''Check that list is uniq'''
+    pp(samples)
+    count = Counter(samples.values())
+    # count = Counter(samples)
+    if any(val > 1 for val in count.values()):
+        print('found dups!')
+        print(count.most_common())
+
+    # pp(count)
+
 def read_sample_list(sample_file,prefix):
     '''Create a randomized sample name and a sampleKey.txt file for temporary renaming purposes'''
-    samples = {}
+    # new_names = {}
     with open(sample_file) as fh:
-         samples = {i.rstrip('\n') : prefix +'-'+ gen_rand_name() for i in fh}
-    with open('sampleKey.txt', 'w') as outfh:
-        for i in samples:
-            outfh.write('{},{}\n'.format(i,samples[i]))
-    return samples
+        # samples = {i.rstrip('\n') : prefix +'-'+ str(gen_rand_name()) for i in fh}
+        samples = [i.rstrip('\n') for i in fh]
+    rnd = gen_rand_name(len(samples))
+    name = [prefix +'-'+ str(x) for x in rnd]
+    new_names = dict(zip(samples,name))
 
-def gen_rand_name():
-    return ''.join([random.choice('0123456789') for x in range(4)])
+    with open('sampleKey.txt', 'w') as outfh:
+        for i in new_names:
+            outfh.write('{},{}\n'.format(i,new_names[i]))
+    return new_names 
+
+def gen_rand_name(num_elems):
+    # return ''.join([random.choice('0123456789') for x in range(4)])
+    return random.sample(range(1000,9999),num_elems)
+
 
 def check_manifest(dirs,samples):
     '''Based on the directories loaded and the sample list, make sure all match'''
