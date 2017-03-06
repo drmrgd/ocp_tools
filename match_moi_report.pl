@@ -1,13 +1,16 @@
 #!/usr/bin/perl
 # Parse a VCF file and generate a table of MOIs and aMOIs
 #
+# TODO:
+#   - Bug!  Expression control sum < some value is being flagged as failed (look at PSN14574_MSN46185)!!
+#
 # 2/12/2014 - D Sims
 ###################################################################################################
 use warnings;
 use strict;
 use autodie;
 
-use constant DEBUG => 0;
+use constant DEBUG => 1;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
@@ -17,7 +20,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v4.8.0_030517-dev";
+my $version = "v4.9.1_030617-dev";
 
 # Remove when in prod.
 print "\n";
@@ -25,26 +28,6 @@ print colored("*" x 75, 'bold yellow on_black'), "\n";
 print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT (ver: $version)\n", 'bold yellow on_black');
 print colored("*" x 75, 'bold yellow on_black');
 print "\n\n";
-
-my $description = <<"EOT";
-Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
-the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
-EOT
-
-my $usage = <<"EOT";
-USAGE: $scriptname [options] <VCF>
-    -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: 5%)
-    --cu         INT   Set upper bound for amplifications (DEFAULT 5% CI >= 4) 
-    --cl         INT   Set lower bound for deletions (DEFAULT 95% CI <= 1) 
-    -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: off. 
-    -r, --reads  INT   Don't report Fusions below this read count. DEFAULT: 1000 reads.
-    -o, --output STR   Send output to custom file.  Default is STDOUT.
-    -R, --Raw          Output raw data rather than pretty printed report that can be parsed with other tools
-    -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. Due to noise NOCALL is always on in SNV / Indel space.
-    -O, --OCP          Data is MATCHv1.0 data from OCP.  Use old LRP1 data for expression control analysis.
-    -v, --version      Version information
-    -h, --help         Print this help information
-EOT
 
 my $help;
 my $ver_info;
@@ -55,8 +38,26 @@ my $cn_upper_cutoff = 4; # Configure to capture upper and lower bound CNs in an 
 my $cn_lower_cutoff = 1; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
 my $read_count = 100;
 my $raw_output;
-my $ocp;
 my $nocall;
+
+my $description = <<"EOT";
+Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
+the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
+EOT
+
+my $usage = <<"EOT";
+USAGE: $scriptname [options] <VCF>
+    -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: $freq_cutoff%)
+    --cu         INT   Set upper bound for amplifications (DEFAULT 5% CI >= $cn_upper_cutoff) 
+    --cl         INT   Set lower bound for deletions (DEFAULT 95% CI <= $cn_lower_cutoff) 
+    -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: off. 
+    -r, --reads  INT   Don't report Fusions below this read count. DEFAULT: $read_count reads.
+    -o, --output STR   Send output to custom file.  Default is STDOUT.
+    -R, --Raw          Output raw data rather than pretty printed report that can be parsed with other tools
+    -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. Due to noise NOCALL is always on in SNV / Indel space.
+    -v, --version      Version information
+    -h, --help         Print this help information
+EOT
 
 GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cn|c=i"        => \$cn_cutoff,
@@ -64,7 +65,6 @@ GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cl=i"          => \$cn_lower_cutoff,
             "output|o=s"    => \$outfile,
             "Raw|R"         => \$raw_output,
-            "OCP|O"         => \$ocp,
             "reads|r=i"     => \$read_count,
             "nocall|n"      => \$nocall,
             "version|v"     => \$ver_info,
@@ -112,7 +112,7 @@ if (DEBUG) {
 }
 
 # Check ENV for required programs
-my @required_programs = qw( vcfExtractor.pl ocp_cnv_report.pl ocp_control_summary.pl ocp_fusion_report.pl );
+my @required_programs = qw( vcfExtractor.pl ocp_cnv_report.pl ocp_control_summary.pl ocp_fusion_report.pl match_rna_qc.pl );
 for my $prog (@required_programs) {
     die "ERROR: '$prog' is required, but not found in your path!\n" unless qx(which $prog);
 }
@@ -121,7 +121,6 @@ for my $prog (@required_programs) {
 my $vcf_file = shift;
 die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e $vcf_file;
 
-
 my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
 my $fusion_data             = proc_fusion(\$vcf_file);
@@ -129,12 +128,11 @@ my $fusion_data             = proc_fusion(\$vcf_file);
 my $current_version = version->parse('2.3');
 my $assay_version = version->parse( vcf_version_check(\$vcf_file) );
 
+print "[INFO]: OVAT version: $assay_version\n" if DEBUG;
 if ($assay_version >= $current_version) {
     my $rna_control_data = rna_qc(\$vcf_file);
     @$fusion_data{qw(P1_SUM P2_SUM)} = @$rna_control_data{qw(pool1_total pool2_total)};
 } else {
-    my $assay_version;
-    ($ocp) ? ($assay_version = 'ocp') : ($assay_version = 'matchv2.0');
     $$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file, \$assay_version);
 }
 
@@ -281,7 +279,6 @@ sub proc_fusion {
     return \%results;
 }
 
-# XXX
 sub rna_qc {
     my $vcf = shift;
     my %results;
@@ -294,11 +291,9 @@ sub rna_qc {
 
 sub proc_ipc {
     # Get the RNA panel expression control sum 
-    my $vcf_file = shift;
-    my $assay_version = shift;
-    my $cmd = "ocp_control_summary.pl $$vcf_file";
-    $cmd .= " -m 1" if $$assay_version eq 'ocp';
-
+    my ($vcf_file,$assay_version) = @_;
+    my %panel = ( '2.0' => '1', '2.2' => '2', '2.3' => '3' );
+    my $cmd = "ocp_control_summary.pl -m $panel{$$assay_version} $$vcf_file";
     open( my $vcf_data, '-|', $cmd ) || die "ERROR: Can't parse the expression control data";
     my ($expr_sum) = map {/\s+(\d+)\s*$/} <$vcf_data>; # trailing whitespace in ocp_control_summary output.
     $expr_sum //= 0;
