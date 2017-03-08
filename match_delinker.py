@@ -15,7 +15,7 @@ import subprocess
 from pprint import pprint as pp
 from collections import defaultdict,Counter
 
-version = '1.1.0_030617'
+version = '1.2.0_030817'
 cwd = os.getcwd()
 
 def get_args():
@@ -29,7 +29,8 @@ def get_args():
         whatever), and a new dataset with relevent identifiers removed from the file.  
         ''',
         )
-    parser.add_argument('sample_file', metavar='<sample_list.file>', help='List of MSNs to delink')
+    parser.add_argument('sample_file', metavar='<sample_list.file>', 
+            help='Flat file list of MSNs corresponding with the samples you wish to delink')
     parser.add_argument('sample_dirs', metavar='<sample_directories>', nargs='+', 
             help='Directories that contain the BAM and VCF files matching the sample list')
     parser.add_argument('-p','--prefix', metavar='<string>', default='Sample',
@@ -54,9 +55,10 @@ def read_sample_list(sample_file,prefix):
     # new_names = {}
     with open(sample_file) as fh:
         # samples = {i.rstrip('\n') : prefix +'-'+ str(gen_rand_name()) for i in fh}
-        samples = [i.rstrip('\n') for i in fh]
+        samples = ['MSN'+i.rstrip('\n').lstrip('MSN') for i in fh] # make sure we have a MSN designator in string.
+        
     rnd = gen_rand_name(len(samples))
-    name = [prefix +'-'+ str(x) for x in rnd]
+    name = [prefix +'-'+ str(x).zfill(4) for x in rnd]
     new_names = dict(zip(samples,name))
 
     with open('sampleKey.txt', 'w') as outfh:
@@ -66,7 +68,7 @@ def read_sample_list(sample_file,prefix):
 
 def gen_rand_name(num_elems):
     # return ''.join([random.choice('0123456789') for x in range(4)])
-    return random.sample(range(1000,9999),num_elems)
+    return random.sample(range(0,9999),num_elems)
 
 
 def check_manifest(dirs,samples):
@@ -183,8 +185,10 @@ def delink_data(sample_list,dirs):
     if not os.path.exists('orig_data'):
         os.mkdir('orig_data')
     
+    count = 0
     for sample in sample_list:
-        # print('sample: {}'.format(sample))
+        count += 1
+        print('  [{}/{}] Processing sample: {}'.format(count,len(sample_list),sample))
         for d in dirs:
             if d.endswith(sample):
                 if not os.path.exists('orig_data/' + d):
