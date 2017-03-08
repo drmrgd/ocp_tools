@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python3
 # Read in a list of MSNs, and get + delink the data for use in other experiments.  Maintain original
 # link list until everything looks OK, and then manually remove the original data.
 #
@@ -12,10 +12,10 @@ import argparse
 import shutil
 import datetime
 import subprocess
+from collections import defaultdict
 from pprint import pprint as pp
-from collections import defaultdict,Counter
 
-version = '1.2.0_030817'
+version = '1.3.0_030817'
 cwd = os.getcwd()
 
 def get_args():
@@ -29,32 +29,19 @@ def get_args():
         whatever), and a new dataset with relevent identifiers removed from the file.  
         ''',
         )
-    parser.add_argument('sample_file', metavar='<sample_list.file>', 
+    parser.add_argument('sample_file', metavar='<msn_list.file>', 
             help='Flat file list of MSNs corresponding with the samples you wish to delink')
     parser.add_argument('sample_dirs', metavar='<sample_directories>', nargs='+', 
-            help='Directories that contain the BAM and VCF files matching the sample list')
+            help='Directories that contain the BAM and VCF files matching the sample list (e.g. PSN12345_MSN6789)')
     parser.add_argument('-p','--prefix', metavar='<string>', default='Sample',
-            help='Prefix for new sample name that would preceed the randomized number string (DEFAULT: "%(default)s"')
+            help='Prefix for new sample name that would preceed the randomized number string (DEFAULT: "%(default)s")')
     parser.add_argument('-v', '--version', action='version', version = '%(prog)s - ' + version) 
     args = parser.parse_args()
     return args
 
-def validate_list(samples):
-    '''Check that list is uniq'''
-    pp(samples)
-    count = Counter(samples.values())
-    # count = Counter(samples)
-    if any(val > 1 for val in count.values()):
-        print('found dups!')
-        print(count.most_common())
-
-    # pp(count)
-
 def read_sample_list(sample_file,prefix):
     '''Create a randomized sample name and a sampleKey.txt file for temporary renaming purposes'''
-    # new_names = {}
     with open(sample_file) as fh:
-        # samples = {i.rstrip('\n') : prefix +'-'+ str(gen_rand_name()) for i in fh}
         samples = ['MSN'+i.rstrip('\n').lstrip('MSN') for i in fh] # make sure we have a MSN designator in string.
         
     rnd = gen_rand_name(len(samples))
@@ -67,9 +54,7 @@ def read_sample_list(sample_file,prefix):
     return new_names 
 
 def gen_rand_name(num_elems):
-    # return ''.join([random.choice('0123456789') for x in range(4)])
     return random.sample(range(0,9999),num_elems)
-
 
 def check_manifest(dirs,samples):
     '''Based on the directories loaded and the sample list, make sure all match'''
@@ -77,6 +62,7 @@ def check_manifest(dirs,samples):
     count = defaultdict(int)
     skipped_dirs = []
     
+    print('Validating manifest of samples and directories to process...',end='')
     for d in dirs:
         msn = d.rstrip('/').split('_')[1]
         if msn in orig_samples:
@@ -100,6 +86,7 @@ def check_manifest(dirs,samples):
 
     if extra_samples:
         samples = {s : samples[s] for s in samples if s not in extra_samples}
+    print('Done!')
     return samples, dirs
 
 def get_header(line):
