@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v4.9.2_030617-dev";
+my $version = "v4.9.3_030817-dev";
 
 # Remove when in prod.
 print "\n";
@@ -440,7 +440,6 @@ sub gen_report {
     my ($gender, $cellularity, $mapd) = @{$$cnv_data{'META'}};
     delete $$cnv_data{'META'};
     
-    # XXX  
     print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
     $format_string = format_string($mapd, '>', 0.5);
     print_msg(@$format_string);
@@ -493,7 +492,12 @@ sub gen_report {
     }
 
     print_msg("::: MATCH Reportable Fusions (Total Mapped Reads: ",'ansi3');
-    $format_string = format_string($tot_rna_reads, '<', 100000);
+    # No good version information here.  Use the presence / absence of pool specific information to deduce what version 
+    # and therefore which threshold to use.
+    my $rna_reads_threshold;
+    ($$fusion_data{'P1_SUM'}) ? ($rna_reads_threshold = 500000) : ($rna_reads_threshold = 100000);
+    #$format_string = format_string($tot_rna_reads, '<', 100000);
+    $format_string = format_string($tot_rna_reads, '<', $rna_reads_threshold);
     print_msg(@$format_string);
 
     if ($ipc_reads) {
