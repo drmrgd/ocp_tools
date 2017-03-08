@@ -1,4 +1,9 @@
 #!/usr/bin/perl
+# Program to read OCAv3 VCF and perform a control summary analysis.  Requires having and OCAv3 fusion panel JSON derived from 
+# the panel BED file (generally using rna_panel_2_json.py), which is not freely distributed at this time.
+#
+# 2/27/2017 - D Sims
+##############################################################################################################################
 use warnings;
 use strict;
 use autodie;
@@ -9,14 +14,17 @@ use Data::Dump;
 use JSON;
 
 my $scriptname = basename($0);
-my $version = "v0.9.2_022717";
+my $version = "v1.0.0_030817";
 my $description = <<"EOT";
-Read in an OCAv3 VCF file and output RNA panel control data.  
+Read in one or more OCAv3 VCF files and output gene expression and expression control data.  Can either output
+a summary table of reads binned by type, or a raw CSV of all expression data.  Requires a panel JSON file not
+part of this package.
 EOT
 
 my $usage = <<"EOT";
-USAGE: $scriptname [options] <input_file>
-    -r, --raw       Send out raw gene data rather than full summary dataset.
+USAGE: $scriptname [options] <VCF_file(s)>
+    -r, --raw       Out raw gene expression and expression control data rather than a summary table.
+    -j, --json      Use a custom panel JSON rather than the default OCAv3 file.  Experimental at this time!
     -o, --output    Send output to custom file.  Default is STDOUT.
     -v, --version   Version information
     -h, --help      Print this help information
@@ -26,8 +34,10 @@ my $help;
 my $ver_info;
 my $outfile;
 my $raw_output;
+my $custom_json;
 
-GetOptions( "raw|r"         => \$raw_output,
+GetOptions( "json|j=s"      => \$custom_json, 
+            "raw|r"         => \$raw_output,
             "output|o=s"    => \$outfile,
             "version|v"     => \$ver_info,
             "help|h"        => \$help )
@@ -55,7 +65,8 @@ if ( scalar( @ARGV ) < 1 ) {
 my @vcfs = @ARGV;
 
 #Test for and load fusion panel json
-my $panel_json = dirname($0) . '/fusion_panel.json';
+my $panel_json;
+($custom_json) ? ($panel_json = $custom_json) : ($panel_json = dirname($0) . '/fusion_panel.json');
 die "ERROR: Can not find the JSON file 'fusion_panel.json' that describes the panel contents.  Must be present in script source dir!\n" unless -f $panel_json;
 my $json_text = do {
     open(my $json_fh, "<", $panel_json);
