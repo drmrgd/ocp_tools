@@ -9,34 +9,70 @@ import os
 import re
 import subprocess
 import datetime
+import argparse
+import subprocess
 from pprint import pprint as pp
+from distutils.version import LooseVersion
 
-version = '2.1.2_012017'
+version = '3.3.0_031017'
+
+def get_args():
+    parser = argparse.ArgumentParser(
+        formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position = 100, width=200),
+        description='''
+        Input one or more VCF files and generate a table of some important metrics. Probably going to be removed
+        or replaced with better script at some point soon.
+        ''',
+        version = '%(prog)s  - ' + version,
+    )
+    parser.add_argument('vcf', metavar='<VCF(s)>', nargs='+', help='VCF file(s) to process')
+    parser.add_argument('-o', '--output', metavar='<outfile>', help='Custom output file (DEFAULT: %(default)s)')
+    args = parser.parse_args()
+    return args
 
 def read_vcf(vcf_file):
-    mapd_value = ''
-    tot_rna_reads = ''
+    oca_v3_version = '2.3'
     expr_sum = 0
-    date = ''
+    fetched_data = {}
 
-    with open(vcf_file) as fh:
-        for line in fh:
-            if line.startswith('##mapd='):
-                mapd_value = get_value(line.rstrip())
-            elif line.startswith('##TotalMappedFusionPanelReads='):
-                elems = line.split('=')
-                tot_rna_reads = value = get_value(line.rstrip())
-            elif re.search('SVTYPE=ExprControl',line):
-                read_count = re.search('READ_COUNT=(\d+).*',line).group(1)
-                expr_sum += int(read_count)
-            elif re.search('##fileDate=',line):
-                date = get_value(line.rstrip())
-                date = date.split()[0]
+    try:
+        with open(vcf_file) as fh:
+            for line in fh:
+                if not line.startswith('#') and 'SVTYPE=ExprControl' not in line:
+                    continue
+                elif line.startswith('##mapd='):
+                    fetched_data['MAPD'] = (get_value(line.rstrip()))
 
-    # Do some date formatting for easier plotting later
-    date = datetime.datetime.strptime(date,"%Y%M%d")
-    formatted_date = date.strftime("%Y-%M-%d")
-    return (mapd_value,tot_rna_reads,expr_sum,formatted_date)
+                elif line.startswith('##TotalMappedFusionPanelReads='):
+                    fetched_data['RNA_Reads'] = (get_value(line.rstrip()))
+
+                elif line.startswith('##fileDate'):
+                    date = datetime.datetime.strptime(get_value(line.rstrip()),"%Y%M%d")
+                    formatted_date = date.strftime("%Y-%M-%d")
+                    fetched_data['Date'] = (formatted_date)
+
+                elif line.startswith('##OncomineVariantAnnotationToolVersion'):
+                    ovat_version = get_value(line.rstrip())
+                    if LooseVersion(ovat_version) > LooseVersion(oca_v3_version):
+                        p1,p2 = get_rna_pool_info(vcf_file)
+                        fetched_data['Pool1'] = p1
+                        fetched_data['Pool2'] = p2
+
+                elif re.search('SVTYPE=ExprControl',line):
+                    read_count = re.search('READ_COUNT=(\d+).*',line).group(1)
+                    expr_sum += int(read_count)
+            fetched_data['Expr_Sum'] = str(expr_sum)
+    except IOError as e:
+        sys.stderr.write('ERROR: Can not open file {}: {}!\n'.format(vcf_file,e))
+        sys.exit()
+    return fetched_data
+
+def get_rna_pool_info(vcf):
+    p = subprocess.Popen(['match_rna_qc.pl', vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (data,err) = p.communicate()
+    ret_res = data.split('\n')
+    results = dict(zip(ret_res[0].split(','),ret_res[1].split(',')))
+    return results['pool1_total'], results['pool2_total']
 
 def get_value(line):
     return line.split('=')[1]
@@ -77,26 +113,43 @@ def col_size(data):
             col_width = len(i)
     return col_width + 4
 
-def print_data(results):
-    print('{sample:{width}}{date:12}{mapd:8}{rna_reads:12}{expr}'.format(
-        sample='Sample', width=col_size(results), date='Date', mapd='MAPD',rna_reads='RNA_Reads',expr='Expr_Sum'))
-    for sample in results:
-        print('{sample:{width}}{date:<12}{mapd:<8}{rna_reads:<12}{expr}'.format(
-            sample=sample,width=col_size(results),date=results[sample][3],mapd=results[sample][0],rna_reads=results[sample][1],expr=results[sample][2]))
-
-def main():
-    try:
-        vcf_files = sys.argv[1:]
-    except IndexError:
-        sys.stderr.write("ERROR: No VCF files loaded to script!  You must enter at least one VCF file!\n")
+def print_data(results,outfile):
+    # Figure out if we have two different versions of analysis, and if so bail out to make easier.
+    l = [len(v) for k,v in results.iteritems()]
+    if len(set(l)) > 1:
+        print('Mixed version VCFs detected!  We can not process two different versions together!  Please run separately and cat the data later.')
         sys.exit(1)
 
+    header_elems = ['Date','MAPD','RNA_Reads','Expr_Sum']
+    fstring = '{:12}{:8}{:12}{:12}\n' 
+    outfile.write('{sample:{width}}'.format(sample='Sample', width=col_size(results)))
+
+    if l[0] == 6:
+        fstring = fstring.replace('\n','{:12}{:12}\n')
+        header_elems += ['Pool1','Pool2']
+
+    outfile.write(fstring.format(*header_elems))
+
+    for sample in results:
+        outfile.write('{sample:{width}}'.format(sample=sample,width=col_size(results)))
+        out_res = [results[sample][r] for r in header_elems]
+        outfile.write(fstring.format(*out_res))
+
+def main():
+    args = get_args()
+    out_fh=''
+    if args.output:
+        sys.stdout.write('Writing results to %s.\n' % args.output)
+        out_fh = open(args.output,'w')
+    else:
+        out_fh = sys.stdout
+
     results = {}
-    for vcf in vcf_files:
+    for vcf in args.vcf:
         sample_name = get_name(vcf)
-        (results[sample_name]) = read_vcf(vcf)
-    print_data(results)
-    return
+        results[sample_name] = read_vcf(vcf)
+
+    print_data(results,out_fh)
 
 if __name__=='__main__':
     main()
