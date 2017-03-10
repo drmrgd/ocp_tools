@@ -9,7 +9,7 @@ import fnmatch
 from time import sleep
 from pprint import pprint as pp
 
-version = '2.0.0_022317'
+version = '3.0.0_031017'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -171,6 +171,9 @@ def get_ir_data(ir_params):
 
     sys.stdout.write("Extracting IR results...")
     p = subprocess.Popen('extract_ir_data.sh', stdout=subprocess.PIPE)
+
+    # Check that helper programs installed and can be executed
+    verify_env()
     p.communicate()
     sys.stdout.write("Done!\n")
 
@@ -189,8 +192,18 @@ def gen_moi_report(msn,vcf,thresholds):
     sys.stdout.write("Done!\n")
     sys.stdout.write(result.decode('ascii'))
 
+def verify_env():
+    prog_list = ['match_moi_report.pl', 'ir_api_retrieve.py', 'extract_ir_data.sh', 'samtools']
+    for p in prog_list:
+        if not os.popen('which %s' % p).read():
+            sys.stderr.write("ERROR: Can not find helper program '{program}' in your $PATH.  Please be sure that '{program}' is installed before continuing.\n".format(program=p))
+            sys.exit(1)
+
 def main():
     args = get_args()
+
+    # Check that helper programs installed and can be executed
+    verify_env()
     
     sys.stdout.write("Validating DNA and RNA BAM files...\n")
     (new_dna_bam, dna_run_id) = validate_bams(args.msn, args.dna_bam, 'dna')
