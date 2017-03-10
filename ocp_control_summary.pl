@@ -10,14 +10,14 @@ use Data::Dump;
 use Term::ANSIColor;
 
 my $scriptname = basename($0);
-my $version = "v2.3.0_011717-dev";
+my $version = "v3.0.0_031017";
 
 # Remove when in prod.
-print "\n";
-print colored("*" x 75, 'bold yellow on_black'), "\n";
-print colored("      DEVELOPMENT VERSION OF $scriptname\n", 'bold yellow on_black');
-print colored("*" x 75, 'bold yellow on_black');
-print "\n\n";
+#print "\n";
+#print colored("*" x 75, 'bold yellow on_black'), "\n";
+#print colored("      DEVELOPMENT VERSION OF $scriptname\n", 'bold yellow on_black');
+#print colored("*" x 75, 'bold yellow on_black');
+#print "\n\n";
 
 my $description = <<"EOT";
 Program to pull out control data from VCF files generated from the OCP fusion pipeline on IR. Can
@@ -125,8 +125,6 @@ for my $input_file ( @files ) {
             $parsed_data{fptp}->{"${gene}_5p3p"} = [$count,sprintf("%.4g", $ratio)];
         }
     }
-    #dd \%parsed_data;
-    #exit;
 
     # If no data collected, this might be a DNA only sample and not run through fusion pipeline
     if ( ! %parsed_data ) {
@@ -148,8 +146,6 @@ for my $input_file ( @files ) {
         :  ($results{$name}->{fptp}{$control} = $parsed_data{fptp}->{$control} );
     }
 }
-#dd \%results;
-#exit;
 
 # Get the longest sample name width
 my $width = 0;
@@ -170,15 +166,12 @@ if ($five_to_three) {
 }
 
 printf "%${top_pad}s $fpad\n", '', @fp_controls if $five_to_three;
-#printf "%-${width}s$epad", 'Samples', sort @used_controls;
 printf "%-${width}s$epad", 'Samples', @used_controls;
 ($five_to_three) ? print "$sub_header\n" : print "\n";
 
 # Print out all control data;
 for my $sample ( sort keys %results ) {
-    #printf "%-${width}s", $sample;
     printf "%-${width}s", $results{$sample}->{sample};
-    #for my $control (sort @used_controls) {
     for my $control (@used_controls) {
         $results{$sample}->{expr}{$control} //= 'N/A';
         printf "%-10s", $results{$sample}->{expr}{$control}
