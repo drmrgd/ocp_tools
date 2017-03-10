@@ -17,14 +17,14 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v4.9.3_030817-dev";
+my $version = "v5.0.0_031017";
 
 # Remove when in prod.
-print "\n";
-print colored("*" x 75, 'bold yellow on_black'), "\n";
-print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT (ver: $version)\n", 'bold yellow on_black');
-print colored("*" x 75, 'bold yellow on_black');
-print "\n\n";
+#print "\n";
+#print colored("*" x 75, 'bold yellow on_black'), "\n";
+#print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT (ver: $version)\n", 'bold yellow on_black');
+#print colored("*" x 75, 'bold yellow on_black');
+#print "\n\n";
 
 my $help;
 my $ver_info;
@@ -207,7 +207,6 @@ sub proc_snv_indel {
         # Skip anything that does not map to an exon for now..might want to get utr vars later, though
         next unless $fields[12] =~ /^Exon/; 
         (my $exon = $fields[12]) =~ s/Exon//;
-        #next if $exon eq 'intronic';
         
         if ( $vaf >= $freq_cutoff ) {
             # Anything that's a hotspot
@@ -472,7 +471,6 @@ sub gen_report {
     #########################
     ##   Fusions Output    ##
     #########################
-    # XXX
     my $tot_rna_reads = $$fusion_data{'MAPPED_RNA'};
     delete $$fusion_data{'MAPPED_RNA'};
 
@@ -496,7 +494,6 @@ sub gen_report {
     # and therefore which threshold to use.
     my $rna_reads_threshold;
     ($$fusion_data{'P1_SUM'}) ? ($rna_reads_threshold = 500000) : ($rna_reads_threshold = 100000);
-    #$format_string = format_string($tot_rna_reads, '<', 100000);
     $format_string = format_string($tot_rna_reads, '<', $rna_reads_threshold);
     print_msg(@$format_string);
 
