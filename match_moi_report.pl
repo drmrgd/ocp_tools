@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.0.0_031017";
+my $version = "v5.0.1_032117";
 
 # Remove when in prod.
 #print "\n";
@@ -390,8 +390,9 @@ sub raw_output {
         print join(',', 'CNV', $var, @{$$cnv_data{$var}}, $mapd), "\n";
     }
 
+    my @skipped_keys = qw(EXPR_CTRL MAPPED_RNA P1_SUM P2_SUM);
     for my $var ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
-        next if $var eq 'EXPR_CTRL' || $var eq 'MAPPED_RNA';
+        next if grep {$var eq $_} @skipped_keys;
         my ($fusion, $junct, $id) = split( /\|/, $var );
         print join(',', 'Fusion', "$fusion.$junct", $id, $$fusion_data{$var}->{'COUNT'}, 
             $$fusion_data{$var}->{'DRIVER'}, $$fusion_data{$var}->{'PARTNER'}), "\n";
