@@ -11,10 +11,10 @@ import subprocess
 import argparse
 from natsort import natsorted
 from collections import defaultdict
-from pprint import pprint
+from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.1.1_021517'
+version = '2.2.0_032717'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -56,7 +56,7 @@ def get_names(string):
     return dna_samp, rna_samp
 
 # def gen_moi_report(vcf,dna,rna):
-def gen_moi_report(vcf,cu,cl,reads):
+def gen_moi_report(vcf,cu,cl,reads,proc_type):
     '''Use MATCH MOI Reporter to generate a variant table we can parse later. Gen CLI Opts to determine
     what params to run match_moi_report with'''
     (dna,rna) = get_names(vcf)
@@ -68,11 +68,15 @@ def gen_moi_report(vcf,cu,cl,reads):
         sys.stderr.write("ERROR: Can not process file: {}!\n".format(vcf))
         raise(error)
     else:
-        return vcf, parse_data(result,dna,rna)
+        # need a tuple to track threads and not crash dict entries if we're doing multithreaded processing.
+        if proc_type == 'single':
+            return parse_data(result,dna,rna)
+        elif proc_type == 'threaded':
+            return vcf, parse_data(result,dna,rna)
 
-def populate_list(var_type, var_data):
+def populate_list(var_type,var_data):
     wanted_fields = {
-        'snv'     : [9,1,2,3,8,0,4,5,6,7],
+        'snv'     : [9,1,2,3,10,11,12,8,0,4,5,6,7],
         'cnv'     : [1,2,0,5],
         'fusions' : [4,2,1,0,3]
     }
@@ -80,13 +84,13 @@ def populate_list(var_type, var_data):
 
 def pad_list(data_list,data_type):
     '''Pad out the list with hyphens where there is no relevent data.  Maybe kludgy, but I don't know a better way'''
-    tmp_list = ['-'] * 10
+    tmp_list = ['-'] * 13
     data_list.reverse()
     if data_type == 'cnv':
-        for i in [0,1,5,6]:
+        for i in [0,1,8,9]:
             tmp_list[i] = data_list.pop()
     elif data_type == 'fusions':
-        for i in [0,3,4,5,7]:
+        for i in [0,3,7,8,10]:
             tmp_list[i] = data_list.pop()
     return tmp_list
 
@@ -118,15 +122,12 @@ def parse_data(report_data,dna,rna):
 def print_data(var_type,data,outfile):
     # Split the key by a colon and sort based on chr and then pos using the natsort library
     if var_type == 'null':
-        # print ','.join(data['no_result'])
         outfile.write(','.join(data['no_result']) + "\n")
     elif var_type == 'snv_data':
         for variant in natsorted(data.keys(), key=lambda k: (k.split(':')[1], k.split(':')[2])):
-            # print ','.join(data[variant])
             outfile.write(','.join(data[variant]) + "\n")
     else:
         for variant in natsorted(data.keys(), key=lambda k: k.split(':')[1]):
-            # print ','.join(data[variant])
             outfile.write(','.join(data[variant]) + "\n")
     return
 
@@ -140,20 +141,22 @@ def main():
     # moi_data = defaultdict(dict)
     # for x in args.vcf_files:
         # print 'processing %s...' %  x
-        # moi_data[x] = gen_moi_report(x,args.cu,args.cl,args.reads)
-    # pprint(dict(moi_data))
+        # moi_data[x] = gen_moi_report(x,args.cu,args.cl,args.reads,'single')
+    # pp(dict(moi_data))
     # sys.exit()
 
     # Threaded method
     pool = ThreadPool(48)
-    task_list = [(x,args.cu,args.cl,args.reads) for x in args.vcf_files]
-
+    task_list = [(x,args.cu,args.cl,args.reads,'threaded') for x in args.vcf_files]
     try:
         moi_data = {vcf : data for vcf,data in pool.imap_unordered(arg_star,task_list)}
     except Exception:
         pool.close()
         pool.join()
         sys.exit(1)
+
+    # pp(dict(moi_data))
+    # sys.exit()
 
     # Setup an output file if we want one
     outfile = ''
@@ -163,7 +166,7 @@ def main():
     else:
         outfile = sys.stdout
 
-    header = ['Sample','Gene','Position','Ref','Alt','VARID','Type','VAF/CN','Coverage/Counts','RefCov','AltCov']
+    header = ['Sample','Gene','Position','Ref','Alt','Transcript','CDS','AA','VARID','Type','VAF/CN','Coverage/Counts','RefCov','AltCov']
     outfile.write(','.join(header) + "\n")
     
     # Print out sample data by VCF
