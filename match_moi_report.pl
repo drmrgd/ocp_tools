@@ -81,6 +81,9 @@ sub print_version {
 help if $help;
 print_version if $ver_info;
 
+# Need to disable the CI cutoffs if we want to use a raw CN cutoff like in MATCH prod.
+($cn_upper_cutoff,$cn_lower_cutoff) = '' if $cn_cutoff;
+
 # Make sure enough args passed to script
 if ( scalar( @ARGV ) < 1 ) {
     print "ERROR: No VCF file passed to script!\n\n";
