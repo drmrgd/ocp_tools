@@ -15,29 +15,28 @@ use Term::ANSIColor;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.4.2_101216";
+my $version = "v1.5.0_032817";
 my $description = <<"EOT";
-Generate a summary MATCH control report.  Need to input a list of VCF files and the version of the MATCH control used.  By
-default we'll use version 2.  Also, can output as a pretty printed report, or can output as a CSV for importation into 
-other tools like R.
-EOT
-
-my $usage = <<"EOT";
-USAGE: $scriptname [options] <vcf_file(s)>
-    -l, --lookup    Version of lookup table to use (1 or 2). DEFAULT: 2.
-    -s, --site      Manually chose the MATCH site rather than deducing it from the file data.
-    -f, --format    Method to format the report output (pp: pretty print, csv: CSV file).  DEFAULT: 'pp'.
-    -o, --output    Send output to custom file.  Default is STDOUT.
-    -v, --version   Version information
-    -h, --help      Print this help information
+Generate a summary MATCH control report.  Need to input a list of VCF files and the version of the MATCH control used.  
+Also, can output as a pretty printed report, or can output as a CSV for importation into other tools like R.
 EOT
 
 my $help;
 my $ver_info;
 my $outfile;
-my $lookup_table = 2;
+my $lookup_table = 3;
 my $format = 'pp';
 my $sequencing_site;
+
+my $usage = <<"EOT";
+USAGE: $scriptname [options] <vcf_file(s)>
+    -l, --lookup    Version of lookup table to use (1, 2, or 3). DEFAULT: '$lookup_table'.
+    -s, --site      Manually chose the MATCH site rather than deducing it from the file data.
+    -f, --format    Method to format the report output (pp: pretty print, csv: CSV file).  DEFAULT: '$format'.
+    -o, --output    Send output to custom file.  Default is STDOUT.
+    -v, --version   Version information
+    -h, --help      Print this help information
+EOT
 
 GetOptions( "lookup|l=s"    => \$lookup_table, 
             "format|f=s"    => \$format,
@@ -114,6 +113,17 @@ generate_report(\%control_data, $format);
 sub check_results {
     my ($data,$lookup_table) = @_;
 
+    my %v3_lookup_table = (
+        'chr3:178916946:G:C:PIK3CA'  => '',
+        'chr7:140453136:A:T:BRAF'    => '',
+        'chr10:89717715:T:TA:PTEN'   => '',
+        'chr13:32968850:C:A:BRCA2'   => '',
+        'chr13:48916815:CACTT:C:RB1' => '',
+        'chr17:7574002:CG:C:TP53'    => '',
+        'chr17:ERBB2'                => '',
+        'CCDC6-RET.C1R12'            => '',
+    );
+
     my %v2_lookup_table = (
         'chr3:178916946:G:C:PIK3CA'  => '',
         'chr7:140453136:A:T:BRAF'    => '',
@@ -146,6 +156,7 @@ sub check_results {
     my %lookup_tables = (
         1  => \%v1_lookup_table,
         2  => \%v2_lookup_table,
+        3  => \%v3_lookup_table,
     );
 
     unless (defined $lookup_tables{$lookup_table}) {
@@ -257,7 +268,7 @@ sub proc_vcf {
     my @filtered_variants = qw( chr17:7579473:G:C:TP53 );
     #push(@filtered_variants, 'EML4-ALK.E6bA20') if $lookup_table == 2;
     push(@filtered_variants, 'EML4-ALK.E6bA20') if $lookup_table =~ /[23]/; 
-    my $cmd = qq(match_moi_report.pl -n -r -R1000 -c7 $$vcf) ;
+    my $cmd = qq(match_moi_report.pl -n -R -r1000 -c7 $$vcf) ;
 
     open( my $moi_report_pipe, '-|', $cmd);
     while (<$moi_report_pipe>) {
