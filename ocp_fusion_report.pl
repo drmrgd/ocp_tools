@@ -150,7 +150,7 @@ sub proc_vcf {
             my ($count) = map { /READ_COUNT=(\d+)/ } @data;
             my ($pair, $junct, $id) = split(/\./, $name);
             $id //= '-';
-            if ($id eq 'Non-Targeted') {
+            if ($id eq 'Non-Targeted' || $id eq 'Novel') {
                 next unless $novel;
             }
             my ($gene1, $gene2) = split(/-/, $pair);
@@ -160,7 +160,6 @@ sub proc_vcf {
             my $fid = join('|', $pair, $junct, $id);
 
             if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
-                #$results{$sample_name}->{$fid}->{'DRIVER'} = $results{$sample_name}->{$fid}->{'PARTNER'} = $gene1;
                 $results{$fid}->{'DRIVER'} = $results{$fid}->{'PARTNER'} = $gene1;
             }
             elsif (grep {$_ eq $gene1} @drivers) {
