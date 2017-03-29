@@ -7,14 +7,16 @@
 #######################################################################################################
 use warnings;
 use strict;
+use autodie;
 
 use Getopt::Long qw( :config bundling auto_abbrev no_ignore_case );
 use File::Basename;
+use Parallel::ForkManager;
 use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v3.0.0_031017";
+my $version = "v3.1.0_031017";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -96,7 +98,138 @@ my @drivers = qw(AKT2 ALK AR AXL BRAF BRCA1 BRCA2 CDKN2A EGFR ERBB2 ERBB4 ERG ES
                  FGFR3 FGR FLT3 JAK2 KRAS MDM4 MET MYB MYBL1 NF1 NOTCH1 NOTCH4 NRG1 NTRK1 NTRK2 NTRK3 NUTM1
                  PDGFRA PDGFRB PIK3CA PPARG PRKACA PRKACB PTEN RAD51B RAF1 RB1 RELA RET ROS1 RSPO2 RSPO3 TERT
 );
+
+#my $input_file = shift;
+#my ($return_data, $sample_id) = proc_vcf(\$input_file);
+#print "sample: $$sample_id\n";
+#dd $return_data;
+#exit;
                  
+my $pm = new Parallel::ForkManager(48);
+$pm->run_on_finish(
+    sub {
+        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data_structure_reference) = @_;
+        my $vcf  = $data_structure_reference->{input};
+        my $name = $data_structure_reference->{id};
+        $name //= basename($vcf);
+        $results{$$name} = $data_structure_reference->{result};
+    }
+);
+
+for my $input_file ( @files ) {
+    $pm->start and next;
+    my ($return_data, $sample_id) = proc_vcf(\$input_file);
+    $pm->finish(0,
+        {
+            result => $return_data,
+            input  => $input_file,
+            id     => $sample_id,
+        }
+    );
+}
+$pm->wait_all_children;
+
+sub proc_vcf {
+    my $vcf = shift;
+    my %results;
+
+    (my $sample_name = $$vcf) =~ s/(:?_Fusion_filtered)?\.vcf$//i;
+    $sample_name =~ s/_RNA//;
+
+    open( my $in_fh, "<", $$vcf );
+    while (<$in_fh>) {
+        next if /^#/;
+        my @data = split;
+
+        # Get rid of FAIL and NOCALL calls to be more compatible with MATCHBox output. Filtering prior to 
+        # Fusion filter to speed up a little.
+        next if $nocall && ($data[6] eq 'FAIL' || $data[6] eq 'NOCALL');
+
+        if ( $data[7] =~ /SVTYPE=Fusion/ ) {
+            my ( $name, $elem ) = $data[2] =~ /(.*?)_([12])$/;
+            my ($count) = map { /READ_COUNT=(\d+)/ } @data;
+            my ($pair, $junct, $id) = split(/\./, $name);
+            $id //= '-';
+            if ($id eq 'Non-Targeted') {
+                next unless $novel;
+            }
+            my ($gene1, $gene2) = split(/-/, $pair);
+
+            # Filter out ref calls if we don't want to view them
+            if ( $count == 0 ) { next unless ( $ref_calls ) }
+            my $fid = join('|', $pair, $junct, $id);
+
+            if ( $pair eq 'MET-MET' || $pair eq 'EGFR-EGFR' ) {
+                #$results{$sample_name}->{$fid}->{'DRIVER'} = $results{$sample_name}->{$fid}->{'PARTNER'} = $gene1;
+                $results{$fid}->{'DRIVER'} = $results{$fid}->{'PARTNER'} = $gene1;
+            }
+            elsif (grep {$_ eq $gene1} @drivers) {
+                $results{$fid}->{'DRIVER'} = $gene1;
+                $results{$fid}->{'PARTNER'} = $gene2;
+            }
+            elsif (grep {$_ eq $gene2} @drivers) {
+                $results{$fid}->{'DRIVER'} = $gene2;
+                $results{$fid}->{'PARTNER'} = $gene1;
+            }
+            else {
+                $results{$fid}->{'DRIVER'} = 'UNKNOWN';
+                $results{$fid}->{'PARTNER'} = "$gene1,$gene2";
+            }
+            $results{$fid}->{'COUNT'} = $count;
+
+            # Get some field width formatting.
+            $fwidth = (length($name)+4) if ( length($name) > $fwidth );
+        }
+    }
+
+    # At least generate a hash entry for a sample with no fusions for the final output table below
+    #if ( ! $results{$sample_name} ) {
+        #$results{$sample_name} = undef;
+    #}
+    return \%results, \$sample_name;
+}
+
+#dd \%results;
+#exit;
+
+# Generate and print out the final results table(s)
+select $out_fh;
+for my $sample ( sort keys %results ) {
+    unless ($raw_output) {
+        print "::: ";
+        print join(',', @genes_list) if @genes_list;
+        print " Fusions in $sample :::\n\n";
+    }
+    
+    if ( $results{$sample} ) {
+        my $fusion_format = "%-${fwidth}s %-12s %-12s %-15s %-15s\n";
+        my @fusion_header = qw (Fusion ID Read_Count Driver_Gene Partner_Gene);
+        printf $fusion_format, @fusion_header unless $raw_output;
+        for my $entry (sort { versioncmp($a,$b) } keys %{$results{$sample}}) {
+            if ($gene) {
+                next unless grep{ $results{$sample}->{$entry}->{'DRIVER'} eq $_ } @genes_list;
+            }
+            my ($fusion, $junct, $id ) = split(/\|/, $entry);
+            next if $results{$sample}->{$entry}->{'COUNT'} < $threshold && ! $ref_calls;
+            print_data(\$sample, "$fusion.$junct", \$id, $results{$sample}->{$entry}, \$fusion_format);
+        }
+    } else {
+        print "\t\t\t<<< No Fusions Detected >>>\n\n" unless $raw_output;
+    }
+}
+
+sub print_data {
+    my ($sample_name,$fusion_name,$id,$data,$format) = @_;
+
+    if ($raw_output) {
+        print join(',', $$sample_name, $fusion_name, $$id, $$data{'COUNT'}, $$data{'DRIVER'}), "\n";
+    } else {
+        printf $$format, $fusion_name, $$id, $$data{'COUNT'}, $$data{'DRIVER'}, $$data{'PARTNER'};
+    }
+    return;
+}
+
+=cut
 for my $input_file ( @files ) {
     (my $sample_name = $input_file) =~ s/(:?_Fusion_filtered)?\.vcf$//i;
     $sample_name =~ s/_RNA//;
@@ -151,40 +284,5 @@ for my $input_file ( @files ) {
         $results{$sample_name} = undef;
     }
 }
+=cut
 
-# Generate and print out the final results table(s)
-select $out_fh;
-for my $sample ( sort keys %results ) {
-    unless ($raw_output) {
-        print "::: ";
-        print join(',', @genes_list) if @genes_list;
-        print " Fusions in $sample :::\n\n";
-    }
-    
-    if ( $results{$sample} ) {
-        my $fusion_format = "%-${fwidth}s %-12s %-12s %-15s %-15s\n";
-        my @fusion_header = qw (Fusion ID Read_Count Driver_Gene Partner_Gene);
-        printf $fusion_format, @fusion_header unless $raw_output;
-        for my $entry (sort { versioncmp($a,$b) } keys %{$results{$sample}}) {
-            if ($gene) {
-                next unless grep{ $results{$sample}->{$entry}->{'DRIVER'} eq $_ } @genes_list;
-            }
-            my ($fusion, $junct, $id ) = split(/\|/, $entry);
-            next if $results{$sample}->{$entry}->{'COUNT'} < $threshold && ! $ref_calls;
-            print_data(\$sample, "$fusion.$junct", \$id, $results{$sample}->{$entry}, \$fusion_format);
-        }
-    } else {
-        print "\t\t\t<<< No Fusions Detected >>>\n\n" unless $raw_output;
-    }
-}
-
-sub print_data {
-    my ($sample_name,$fusion_name,$id,$data,$format) = @_;
-
-    if ($raw_output) {
-        print join(',', $$sample_name, $fusion_name, $$id, $$data{'COUNT'}, $$data{'DRIVER'}), "\n";
-    } else {
-        printf $$format, $fusion_name, $$id, $$data{'COUNT'}, $$data{'DRIVER'}, $$data{'PARTNER'};
-    }
-    return;
-}
