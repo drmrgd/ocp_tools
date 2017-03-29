@@ -180,8 +180,6 @@ for my $input_file (@vcfs) {
      );
 }
 $pm->wait_all_children;
-dd \%cnv_data;
-exit;
 
 my %results;
 for my $sample ( keys %cnv_data ) {
