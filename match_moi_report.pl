@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.0.1_040617";
+my $version = "v5.0.2_040717";
 
 # Remove when in prod.
 #print "\n";
@@ -223,10 +223,10 @@ sub proc_snv_indel {
             }
             # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
             elsif ( $gene eq 'EGFR' ) { 
-                if ( $exon == 19 && $function eq 'nonframeshiftDeletion' ) {
+                if ( $exon eq '19' && $function eq 'nonframeshiftDeletion' ) {
                     $results{$id} = gen_var_entry(\@fields, 'nonframeshiftDeletion in Exon 19');
                 }
-                elsif ($exon == 20 && $function eq 'nonframeshiftInsertion') {
+                elsif ($exon eq '20' && $function eq 'nonframeshiftInsertion') {
                     $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 20');
                 }
             }
@@ -235,7 +235,7 @@ sub proc_snv_indel {
                 $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 20');
             }
             # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
-            elsif ( $gene eq 'KIT' && (grep $exon == $_, (9,11)) && $function =~ /nonframeshift.*/ ) {
+            elsif ( $gene eq 'KIT' && (grep $exon eq $_, ('9','11')) && $function =~ /nonframeshift.*/ ) {
                 $results{$id} = gen_var_entry(\@fields, 'nonframeshiftIndel in Exon 9 or 11 of KIT');
             }
         }
