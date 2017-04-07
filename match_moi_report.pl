@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.0.2_040617";
+my $version = "v5.0.1_040617";
 
 # Remove when in prod.
 #print "\n";
@@ -210,7 +210,7 @@ sub proc_snv_indel {
         # Skip anything that does not map to an exon for now..might want to get utr vars later, though
         #next unless $fields[12] =~ /^Exon/; 
         (my $exon = $fields[12]) =~ s/Exon// if $fields[12] =~ /^Exon/;
-        #$exon //= '-';
+        $exon //= '-';
         
         if ( $vaf >= $freq_cutoff ) {
             # Anything that's a hotspot
