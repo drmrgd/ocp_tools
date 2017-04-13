@@ -205,7 +205,12 @@ sub proc_snv_indel {
         my $gene       = $fields[8];
         my $ocp_vc     = $fields[15];
         my $hotspot_id = $fields[7];
-        my $function   = $fields[13];
+        # TODO: verify this works...trying to output splice site annotation in function if available so that the field is not empty.
+        my $function;
+        #next unless $gene eq 'MET';
+        ($fields[13] eq '---') ? ($function = $fields[12] and $fields[13] = $fields[12]) : ($function = $fields[13]);
+        #print "$fields[12]  $fields[13]  $function\n";
+        #my $function   = $fields[13];
 
         # Skip anything that does not map to an exon for now..might want to get utr vars later, though
         #next unless $fields[12] =~ /^Exon/; 
@@ -358,8 +363,8 @@ sub field_width {
             $hgvs_width = $hgvs_len if ( $hgvs_len > $hgvs_width );
         }
 
-        ( $filter_width > 13 ) ? ($filter_width += 4) : ($filter_width = 17);
-        return ( $ref_width + 4, $var_width + 4, $filter_width, $hgvs_width + 4);
+        ( $filter_width > 13 ) ? ($filter_width += 2) : ($filter_width = 17);
+        return ( $ref_width + 2, $var_width + 2, $filter_width, $hgvs_width + 2);
     } 
     elsif ( $type eq 'fusion' ) {
         for my $variant ( keys %$data_ref ) {
@@ -426,7 +431,7 @@ sub gen_report {
     ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
     my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript CDS Protein Function oncomineGeneClass 
                                oncomineVariantClass Functional_Rule );
-    my $snv_indel_format = "%-17s %-${w1}s %-${w2}s %-8s %-7s %-7s %-7s %-14s %-10s %-16s %-${w4}s %-16s %-23s %-21s %-22s %-21s\n";
+    my $snv_indel_format = "%-16s %-${w1}s %-${w2}s %-7s %-7s %-7s %-7s %-12s %-8s %-16s %-${w4}s %-16s %-28s %-19s %-22s %-21s\n";
 
     print_msg(sprintf($snv_indel_format, @snv_indel_header));
     if ( %$snv_indels ) {
