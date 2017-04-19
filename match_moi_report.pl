@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.0.2_040717";
+my $version = "v5.1.0_042917";
 
 # Remove when in prod.
 #print "\n";
@@ -36,6 +36,7 @@ my $cn_lower_cutoff = 1; # Configure to capture upper and lower bound CNs in an 
 my $read_count = 100;
 my $raw_output;
 my $nocall;
+my $blood;
 
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
@@ -50,6 +51,7 @@ USAGE: $scriptname [options] <VCF>
     -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: off. 
     -r, --reads  INT   Don't report Fusions below this read count. DEFAULT: $read_count reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
+    -b, --blood        Report is from a Pediatric MATCH Blood specimen and no fusion panel run.
     -R, --Raw          Output raw data rather than pretty printed report that can be parsed with other tools
     -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. Due to noise NOCALL is always on in SNV / Indel space.
     -v, --version      Version information
@@ -62,6 +64,7 @@ GetOptions( "freq|f=f"      => \$freq_cutoff,
             "cl=i"          => \$cn_lower_cutoff,
             "output|o=s"    => \$outfile,
             "Raw|R"         => \$raw_output,
+            "blood|b"       => \$blood,
             "reads|r=i"     => \$read_count,
             "nocall|n"      => \$nocall,
             "version|v"     => \$ver_info,
@@ -123,17 +126,19 @@ die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e 
 
 my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
-my $fusion_data             = proc_fusion(\$vcf_file);
+my $fusion_data             = proc_fusion(\$vcf_file) unless $blood;  # Can not run fusion panel on blood specimens since no RNA.
 
 my $current_version = version->parse('2.3');
 my $assay_version = version->parse( vcf_version_check(\$vcf_file) );
-
 print "[INFO]: OVAT version: $assay_version\n" if DEBUG;
-if ($assay_version >= $current_version) {
-    my $rna_control_data = rna_qc(\$vcf_file);
-    @$fusion_data{qw(P1_SUM P2_SUM)} = @$rna_control_data{qw(pool1_total pool2_total)};
-} else {
-    $$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file, \$assay_version);
+
+unless ($blood) {
+    if ($assay_version >= $current_version) {
+        my $rna_control_data = rna_qc(\$vcf_file);
+        @$fusion_data{qw(P1_SUM P2_SUM)} = @$rna_control_data{qw(pool1_total pool2_total)};
+    } else {
+        $$fusion_data{'EXPR_CTRL'}  = proc_ipc(\$vcf_file, \$assay_version);
+    }
 }
 
 # Print out the combined report
@@ -400,6 +405,9 @@ sub raw_output {
         print join(',', 'CNV', $var, @{$$cnv_data{$var}}, $mapd), "\n";
     }
 
+    # Do not output fusion results if blood since no fusion panel run.
+    return if $blood;
+
     my @skipped_keys = qw(EXPR_CTRL MAPPED_RNA P1_SUM P2_SUM);
     for my $var ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
         next if grep {$var eq $_} @skipped_keys;
@@ -478,6 +486,9 @@ sub gen_report {
         print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
     }
     print_msg("\n");
+
+    # Do not output fusion data results if we have run on blood since no fusion panel run.
+    return if $blood;
 
     #########################
     ##   Fusions Output    ##
