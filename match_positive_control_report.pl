@@ -15,7 +15,7 @@ use Term::ANSIColor;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v1.5.0_032817";
+my $version = "v1.6.0_042017";
 my $description = <<"EOT";
 Generate a summary MATCH control report.  Need to input a list of VCF files and the version of the MATCH control used.  
 Also, can output as a pretty printed report, or can output as a CSV for importation into other tools like R.
@@ -209,6 +209,8 @@ sub generate_report {
         'CNV'    => [qw(0 1 2 5 8)],
         'Fusion' => [qw(0 4 1 3 6)],
     );
+    #dd $data;
+    #exit;
 
     my @output_strings;
     my $sample_width = get_width([keys %$data]);
@@ -224,7 +226,12 @@ sub generate_report {
         # If no input and no deduced site, then just print a placeholder string
         warn "WARN: No sequencing site info available!\n" if $site eq '---';
 
-        for my $variant (sort{ $$data{$sample}->{$b}[0] cmp $$data{$sample}->{$a}[0] } keys $$data{$sample}) {
+        #for my $variant (sort{ $$data{$sample}->{$b}[0] cmp $$data{$sample}->{$a}[0] } keys $$data{$sample}) {
+        for my $variant (sort{ 
+                $$data{$sample}->{$b}[0] cmp $$data{$sample}->{$a}[0] or 
+                versioncmp($$data{$sample}->{$a}[1],$$data{$sample}->{$b}[1])
+            } keys $$data{$sample}) {
+
             my $type = $$data{$sample}->{$variant}[0];
             my @wanted_indices = @{$want_fields{$type}};
             my @var_data = ($sample, $site, $variant, @{$$data{$sample}->{$variant}}[@wanted_indices]);
