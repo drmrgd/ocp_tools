@@ -115,10 +115,12 @@ sub check_results {
 
     my %v3_lookup_table = (
         'chr3:178916946:G:C:PIK3CA'  => '',
+        'chr3:49412973:C:T:RHOA'     => '',
         'chr7:140453136:A:T:BRAF'    => '',
         'chr10:89717715:T:TA:PTEN'   => '',
         'chr13:32968850:C:A:BRCA2'   => '',
         'chr13:48916815:CACTT:C:RB1' => '',
+        'chr16:89815074:GA:G:FANCA'  => '',
         'chr17:7574002:CG:C:TP53'    => '',
         'chr17:ERBB2'                => '',
         'CCDC6-RET.C1R12'            => '',
