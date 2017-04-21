@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.1.0_042917";
+my $version = "v5.2.0_042117";
 
 # Remove when in prod.
 #print "\n";
@@ -210,25 +210,24 @@ sub proc_snv_indel {
         my $gene       = $fields[8];
         my $ocp_vc     = $fields[15];
         my $hotspot_id = $fields[7];
-        # TODO: verify this works...trying to output splice site annotation in function if available so that the field is not empty.
         my $function;
-        #next unless $gene eq 'MET';
         ($fields[13] eq '---') ? ($function = $fields[12] and $fields[13] = $fields[12]) : ($function = $fields[13]);
-        #print "$fields[12]  $fields[13]  $function\n";
-        #my $function   = $fields[13];
 
         # Skip anything that does not map to an exon for now..might want to get utr vars later, though
         #next unless $fields[12] =~ /^Exon/; 
         (my $exon = $fields[12]) =~ s/Exon// if $fields[12] =~ /^Exon/;
         $exon //= '-';
         
+        #next unless $gene eq 'ERBB2';
         if ( $vaf >= $freq_cutoff ) {
+            #dd \@fields and next;
             # Anything that's a hotspot
-            if ( $hotspot_id ne '.' ) {
+            if ( $hotspot_id ne '.' or $ocp_vc eq 'Hotspot' ) {
                 $results{$id} = gen_var_entry(\@fields, 'Hotspot Variant');
             }
             # De Novo TSG frameshift calls
-            elsif ( grep {$ocp_vc eq $_} @oncomine_vc ) {
+            #elsif ( grep {$ocp_vc eq $_} @oncomine_vc ) {
+            elsif ( $ocp_vc eq 'Deleterious' ) {
                 $results{$id} = gen_var_entry(\@fields, 'Deleterious in TSG');
             }
             # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
