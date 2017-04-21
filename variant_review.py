@@ -9,7 +9,7 @@ import fnmatch
 from time import sleep
 from pprint import pprint as pp
 
-version = '3.0.0_031017'
+version = '3.0.1_042117'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -238,6 +238,7 @@ def main():
 
     sys.stdout.write('Getting data from IR for analysis ID {}...'.format(run_id))
     sys.stdout.flush()
+
     get_ir_data(gen_retr_cmd(ir_arg_list))
 
     # Get the VCF file for processing.
@@ -259,4 +260,7 @@ def main():
     sys.stdout.write('\nReport generation complete.  Results can be found in {}.\n'.format(os.getcwd()))
 
 if __name__ == '__main__':
-    main()
+    try: 
+        main()
+    except (KeyboardInterrupt,SystemExit):
+        sys.exit(1)
