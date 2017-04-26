@@ -157,7 +157,7 @@ def get_ir_data(ir_params):
     while count:
         p = subprocess.Popen(ir_params,stdout=subprocess.PIPE,stderr=subprocess.PIPE) 
         result,error = p.communicate()
-        if p.returncode != 0:
+        if p.returncode != 0 or error:
             sys.stderr.write("\nError retrieving data: {}\n".format(error))
             if count == 3:
                 sys.stderr.write('\nERROR: Can not retrieve data from IR server. Max attempts reached (3).  Check the connection and try again!\n')
