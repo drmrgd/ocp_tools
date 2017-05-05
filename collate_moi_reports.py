@@ -14,7 +14,7 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.3.0_050517'
+version = '2.4.0_050517'
 debug = True
 
 def get_args():
@@ -52,14 +52,11 @@ def get_args():
 
 def get_names(string):
     string = os.path.basename(string)
-    match_1 = re.search('(.*?)[-_]?DNA_(.*?)[-_]?RNA.*\.vcf', string)    
-    try: 
-        dna_samp = match.group(1)
-        rna_samp = match.group(2)
+    try:
+        (dna_samp,rna_samp) = re.search('(.*?DNA)_(.*).vcf$',string).group(1,2)
     except:
         if not quiet:
             sys.stderr.write("WARN: Can not get DNA or RNA sample name for '%s'! Using full VCF filename instead\n" % string)
-            
         dna_samp = rna_samp = string.rstrip('.vcf')
     return dna_samp, rna_samp
 
