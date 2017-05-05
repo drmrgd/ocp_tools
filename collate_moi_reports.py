@@ -14,8 +14,8 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.4.0_050517'
-debug = True
+version = '2.5.0_050517'
+debug = False 
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -165,11 +165,11 @@ def non_threaded_proc(vcf_files,cnv_args,reads):
         moi_data[x] = gen_moi_report(x,cnv_args,reads,'single')
     return moi_data
 
-def threaded_proc(vcf_files,cu,cl,cn,reads):
+def threaded_proc(vcf_files,cnv_params,reads):
     pool = ThreadPool(48)
     moi_data = defaultdict(dict)
 
-    task_list = [(x,cu,cl,reads,'threaded') for x in vcf_files]
+    task_list = [(x,cnv_params,reads,'threaded') for x in vcf_files]
     try:
         moi_data = {vcf : data for vcf,data in pool.imap_unordered(arg_star,task_list)}
     except Exception:
@@ -178,25 +178,25 @@ def threaded_proc(vcf_files,cu,cl,cn,reads):
         sys.exit(1)
     return moi_data
 
+def print_title(fh,**kwargs):
+    '''Print out a header to remind me just what params I used this time!'''
+    cnv_params = parse_cnv_params(kwargs['cu'],kwargs['cl'],kwargs['cn'])
+    string_params = '='.join([str(x).lstrip('--') for x in cnv_params])
+    if 'cl' in string_params:
+        string_params = string_params.replace('=cl','; cl')
+
+    fh.write('-'*80)
+    fh.write('\nCollated MOI Reports Using Params CNV: {}, Fusion Reads: reads={}\n'.format(string_params,kwargs['reads']))
+    fh.write('-'*80)
+    fh.write('\n')
+    return
+
 def main():
     args = get_args()
     if debug:
         print('CLI args as passed:')
         pp(vars(args))
         print('')
-
-    # handle complex CNV args
-    cnv_args = parse_cnv_params(args.cu,args.cl,args.cn)
-
-    # XXX
-    if args.procs == '0':
-        moi_data = non_threaded_proc(args.vcf_files,cnv_args,args.reads)
-    else:
-        sys.exit()
-        print('not dev yet')
-        # moi_data = threaded_proc(args.vcfs)
-    pp(dict(moi_data))
-    sys.exit()
 
     # Setup an output file if we want one
     outfile = ''
@@ -205,6 +205,16 @@ def main():
         outfile = open(args.output, 'w')
     else:
         outfile = sys.stdout
+    
+    print_title(outfile,**vars(args))
+
+    # handle complex CNV args
+    cnv_args = parse_cnv_params(args.cu,args.cl,args.cn)
+
+    if args.procs == '0':
+        moi_data = non_threaded_proc(args.vcf_files,cnv_args,args.reads)
+    else:
+        moi_data = threaded_proc(args.vcf_files,cnv_args,args.reads)
 
     header = ['Sample','Gene','Position','Ref','Alt','Transcript','CDS','AA','VARID','Type','VAF/CN','Coverage/Counts','RefCov','AltCov']
     outfile.write(','.join(header) + "\n")
