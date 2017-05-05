@@ -14,7 +14,8 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.2.0_032717'
+version = '2.3.0_050517'
+debug = True
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -27,8 +28,12 @@ def get_args():
             version = '%(prog)s - ' + version,
             )
     parser.add_argument('vcf_files', nargs='+', help='List of VCF files to process.')
+    parser.add_argument('-p', '--procs', default='24', metavar='<num_procs>', 
+            help='Number of processes to run. Input 0 if you want do not want to perform threaded processing. DEFAULT: %(default)s')
     parser.add_argument('-q','--quiet', action='store_false', default=True, 
             help='Do not suppress warning and extra output')
+    parser.add_argument('--cn', metavar='INT',
+            help='Use copy number (CN) value for CNV reporting to be more compatible with MATCH rules. This will disable CU and CL thresholds and is off by default')
     parser.add_argument('--cu', default=4, metavar='INT', 
             help='Copy number threshold (5%% CI lower bound) to pass to match_moi_report for reporting amplifications. DEFAULT: %(default)s')
     parser.add_argument('--cl', default=1, metavar='INT', 
@@ -37,6 +42,9 @@ def get_args():
             help='Threshold for number of fusion reads to report. DEFAULT: %(default)s')
     parser.add_argument('-o','--output', help='Output to file rather than STDOUT ***NOT YET IMPLEMENTED***')
     args = parser.parse_args()
+
+    if args.cn:
+        args.cu = args.cl = None
 
     global quiet
     quiet = args.quiet
@@ -55,12 +63,30 @@ def get_names(string):
         dna_samp = rna_samp = string.rstrip('.vcf')
     return dna_samp, rna_samp
 
-# def gen_moi_report(vcf,dna,rna):
-def gen_moi_report(vcf,cu,cl,reads,proc_type):
+def parse_cnv_params(cu,cl,cn):
+    '''Since CNV params are a bit difficult to work with, create a better,standardized list to pass into functions below'''
+    params_list = []
+    params = {
+        '--cu' : cu,
+        '--cl' : cl,
+        '--cn' : cn
+    }
+    # Would like to write a generatro expression here, but can't figure it out!
+    for k,v in params.items():
+        if v:
+            params_list.extend([k,v])
+    return params_list
+
+def gen_moi_report(vcf,cnv_args,reads,proc_type):
     '''Use MATCH MOI Reporter to generate a variant table we can parse later. Gen CLI Opts to determine
     what params to run match_moi_report with'''
     (dna,rna) = get_names(vcf)
-    moi_report_cmd = ['match_moi_report.pl', '--cu', str(cu), '--cl', str(cl), '-r', str(reads), '-R', vcf]
+    thresholds = cnv_args + ['-r', str(reads), '-R']
+    # moi_report_cmd = ['match_moi_report.pl', '--cu', str(cu), '--cl', str(cl), '-r', str(reads), '-R', vcf]
+    moi_report_cmd = ['match_moi_report.pl'] + thresholds + [vcf]
+    # print('moi report cmd: ')
+    # pp(moi_report_cmd)
+    # sys.exit()
     p=subprocess.Popen(moi_report_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result,error = p.communicate()
 
@@ -134,29 +160,46 @@ def print_data(var_type,data,outfile):
 def arg_star(args):
     return gen_moi_report(*args)
 
-def main():
-    args = get_args()
+def non_threaded_proc(vcf_files,cnv_args,reads):
+    '''If for some reason we only want to use a single thread / proc to do this'''
+    moi_data = defaultdict(dict)
+    for x in vcf_files:
+        print 'processing %s...' %  x
+        moi_data[x] = gen_moi_report(x,cnv_args,reads,'single')
+    return moi_data
 
-    # Single process
-    # moi_data = defaultdict(dict)
-    # for x in args.vcf_files:
-        # print 'processing %s...' %  x
-        # moi_data[x] = gen_moi_report(x,args.cu,args.cl,args.reads,'single')
-    # pp(dict(moi_data))
-    # sys.exit()
-
-    # Threaded method
+def threaded_proc(vcf_files,cu,cl,cn,reads):
     pool = ThreadPool(48)
-    task_list = [(x,args.cu,args.cl,args.reads,'threaded') for x in args.vcf_files]
+    moi_data = defaultdict(dict)
+
+    task_list = [(x,cu,cl,reads,'threaded') for x in vcf_files]
     try:
         moi_data = {vcf : data for vcf,data in pool.imap_unordered(arg_star,task_list)}
     except Exception:
         pool.close()
         pool.join()
         sys.exit(1)
+    return moi_data
 
-    # pp(dict(moi_data))
-    # sys.exit()
+def main():
+    args = get_args()
+    if debug:
+        print('CLI args as passed:')
+        pp(vars(args))
+        print('')
+
+    # handle complex CNV args
+    cnv_args = parse_cnv_params(args.cu,args.cl,args.cn)
+
+    # XXX
+    if args.procs == '0':
+        moi_data = non_threaded_proc(args.vcf_files,cnv_args,args.reads)
+    else:
+        sys.exit()
+        print('not dev yet')
+        # moi_data = threaded_proc(args.vcfs)
+    pp(dict(moi_data))
+    sys.exit()
 
     # Setup an output file if we want one
     outfile = ''
