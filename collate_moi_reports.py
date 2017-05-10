@@ -14,7 +14,7 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.5.0_050517'
+version = '2.5.1_051017'
 debug = False 
 
 def get_args():
@@ -28,17 +28,17 @@ def get_args():
             version = '%(prog)s - ' + version,
             )
     parser.add_argument('vcf_files', nargs='+', help='List of VCF files to process.')
-    parser.add_argument('-p', '--procs', default='24', metavar='<num_procs>', 
+    parser.add_argument('-p', '--procs', default='24', metavar='<num_procs>',
             help='Number of processes to run. Input 0 if you want do not want to perform threaded processing. DEFAULT: %(default)s')
     parser.add_argument('-q','--quiet', action='store_false', default=True, 
             help='Do not suppress warning and extra output')
-    parser.add_argument('--cn', metavar='INT',
+    parser.add_argument('--cn', metavar='INT', 
             help='Use copy number (CN) value for CNV reporting to be more compatible with MATCH rules. This will disable CU and CL thresholds and is off by default')
     parser.add_argument('--cu', default=4, metavar='INT', 
             help='Copy number threshold (5%% CI lower bound) to pass to match_moi_report for reporting amplifications. DEFAULT: %(default)s')
-    parser.add_argument('--cl', default=1, metavar='INT', 
+    parser.add_argument('--cl', default=1, metavar='INT',
             help='Copy number threshold (95%% CI upper bound) to pass to match_moi_report for reporting copy loss. DEFAULT: %(default)s')
-    parser.add_argument('--reads', default=100, metavar='INT',
+    parser.add_argument('--reads', default=100, metavar='INT', 
             help='Threshold for number of fusion reads to report. DEFAULT: %(default)s')
     parser.add_argument('-o','--output', help='Output to file rather than STDOUT ***NOT YET IMPLEMENTED***')
     args = parser.parse_args()
@@ -66,12 +66,13 @@ def parse_cnv_params(cu,cl,cn):
     params = {
         '--cu' : cu,
         '--cl' : cl,
-        '--cn' : cn
+        '--cn' : cn 
     }
-    # Would like to write a generatro expression here, but can't figure it out!
-    for k,v in params.items():
+
+    # Would like to write a generator expression here, but can't figure it out!
+    for k,v in params.iteritems():
         if v:
-            params_list.extend([k,v])
+            params_list.extend([k,str(v)])
     return params_list
 
 def gen_moi_report(vcf,cnv_args,reads,proc_type):
@@ -79,11 +80,7 @@ def gen_moi_report(vcf,cnv_args,reads,proc_type):
     what params to run match_moi_report with'''
     (dna,rna) = get_names(vcf)
     thresholds = cnv_args + ['-r', str(reads), '-R']
-    # moi_report_cmd = ['match_moi_report.pl', '--cu', str(cu), '--cl', str(cl), '-r', str(reads), '-R', vcf]
     moi_report_cmd = ['match_moi_report.pl'] + thresholds + [vcf]
-    # print('moi report cmd: ')
-    # pp(moi_report_cmd)
-    # sys.exit()
     p=subprocess.Popen(moi_report_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result,error = p.communicate()
 
@@ -168,11 +165,11 @@ def non_threaded_proc(vcf_files,cnv_args,reads):
 def threaded_proc(vcf_files,cnv_params,reads):
     pool = ThreadPool(48)
     moi_data = defaultdict(dict)
-
-    task_list = [(x,cnv_params,reads,'threaded') for x in vcf_files]
+    task_list = [(x,cnv_params,str(reads),'threaded') for x in vcf_files]
     try:
         moi_data = {vcf : data for vcf,data in pool.imap_unordered(arg_star,task_list)}
     except Exception:
+        raise
         pool.close()
         pool.join()
         sys.exit(1)
