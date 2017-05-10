@@ -15,7 +15,7 @@ import math
 from pprint import pprint as pp
 from distutils.version import LooseVersion
 
-version = '3.3.1_031017'
+version = '3.3.2_031017'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -76,7 +76,7 @@ def get_rna_pool_info(vcf):
     # return int(round(float(results['pool1_total']))), int(round(float(results['pool2_total'])))
     p1_tot = str(round(float(results['pool1_total'])))
     p2_tot = str(round(float(results['pool2_total'])))
-    return p1_tot.rstrip('.0'), p2_tot.rstrip('.0')
+    return p1_tot.split('.')[0], p2_tot.split('.')[0]
 
 def get_value(line):
     return line.split('=')[1]
