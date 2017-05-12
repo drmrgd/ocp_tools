@@ -5,13 +5,14 @@
 # 12/1/2016 - D Sims
 #######################################################################################################################
 set -e
-VERSION='3.3.0_050917'
+VERSION='3.4.0_051217'
 cwd=$(pwd)
 
 function usage() {
 cat << EOT
 USAGE: $(basename $0) [-s <sever>] [-a] <psn_list>
-    -s    Server from which we want data
+    -d    Location of data to download. Options are 'local', 'cloud', and 'matchbox'. DEFAULT: cloud.
+    -b    Bucket name needed when downloading data from the cloud instance. DEFAULT: adultmatch.
     -a    Analyze only.  Useful when we already have a directory of PSN_MSN data from get_mb_data.py. This option
           requires no PSN list like when you want to download also (i.e. conventional usage).
     -v    Print version info and exit.
@@ -19,13 +20,16 @@ USAGE: $(basename $0) [-s <sever>] [-a] <psn_list>
 EOT
 }
 
-while getopts ":has:" opt; do
+while getopts ":had:b:" opt; do
     case $opt in 
-        s)
+        d)
             data_source=$OPTARG
             ;;
         a)
             analyze_only=1
+            ;; 
+        b)
+            bucket=$OPTARG
             ;;
         h)
             #echo "USAGE: $0 [-s <server] [-a] <psn_list>"
@@ -51,14 +55,15 @@ if [[ -z $data_source ]]; then
     #data_source='local'
     data_source='cloud'
 fi
+if [[ -z $bucket ]]; then 
+    bucket='adultmatch'
+fi
 
 function check_dir() {
     # Needed just in case we have old analyses in the same dir.  Causes big problems!
-    echo "checking the dir"
-    exit
-
     if [[ $(find . -maxdepth 1 -name "PSN*") ]]; then 
-        echo "Warning: There are PSN directories in the current working directory already.  Results in those will be purged and regenerated, if you continue."
+        echo "Warning: There are PSN directories in the current working directory already.  Results in those will be 
+        purged and regenerated, if you continue."
         read -r -p "Continue [y|N]: " response
         response=${response,,}
         if [[ $response =~ ^(no|n)$ ]]; then
@@ -77,13 +82,10 @@ function check_dir() {
 function get_data() {
     # Read list, get data
     patient_list=$1
-    echo the patient list is $patient_list
-    exit
-
     if [[ -e $patient_list ]]; then
         if [[ $data_source -eq 'cloud' ]]; then
             #get_mb_data.py -s $data_source -a adultmatch -B -b $patient_list 
-            get_mb_data.py -d $data_source -a adultmatch -s nci -B -b $patient_list 
+            get_mb_data.py -d $data_source -a $bucket -s nci -B -b $patient_list 
         else
             get_mb_data.py -s $data_source -B -b $patient_list 
         fi
@@ -101,7 +103,7 @@ echo INFO: data source is $data_source
 if [[ $analyze_only ]]; then
     echo INFO: Running analysis only on pre-downloaded data.
 else
-    check_dir && get_data
+    check_dir && get_data $patient_list
 fi
 
 # Get list of PSN_MSNs 
