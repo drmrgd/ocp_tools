@@ -273,16 +273,15 @@ sub proc_vcf {
     my ($vcf, $name) = @_;
     my %results;
 
-    # Don't output these calls since we want them filtered anyway.
-    my @filtered_variants = qw( chr17:7579473:G:C:TP53 );
-    #push(@filtered_variants, 'EML4-ALK.E6bA20') if $lookup_table == 2;
+    # Blacklist these calls since they are artifact or not reliable.
+    my @filtered_variants = qw( chr17:7579473:G:C:TP53 chr17:CDK12 chr17:RAD51C);
+
     push(@filtered_variants, 'EML4-ALK.E6bA20') if $lookup_table =~ /[23]/; 
     my $cmd = qq(match_moi_report.pl -n -R -r1000 -c7 $$vcf) ;
 
     open( my $moi_report_pipe, '-|', $cmd);
     while (<$moi_report_pipe>) {
         chomp;
-        #next unless /^chr/ || /^[-\w\d]+\.[^\.]+\b/;
         next if /NOTE/;
         my @data = split(/,/);
         my $varid; 
