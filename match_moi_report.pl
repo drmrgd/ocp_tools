@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.2.0_042117";
+my $version = "v5.3.0_051817";
 
 # Remove when in prod.
 #print "\n";
@@ -37,6 +37,7 @@ my $read_count = 100;
 my $raw_output;
 my $nocall;
 my $blood;
+my $ped_match;
 
 my $description = <<"EOT";
 Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
@@ -52,6 +53,7 @@ USAGE: $scriptname [options] <VCF>
     -r, --reads  INT   Don't report Fusions below this read count. DEFAULT: $read_count reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
     -b, --blood        Report is from a Pediatric MATCH Blood specimen and no fusion panel run.
+    -p, --ped_match    Data is from the Pediatric MATCH study. Different non-hotspot rules are run, and so the reporting is a little different.
     -R, --Raw          Output raw data rather than pretty printed report that can be parsed with other tools
     -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. Due to noise NOCALL is always on in SNV / Indel space.
     -v, --version      Version information
@@ -65,6 +67,7 @@ GetOptions( "freq|f=f"      => \$freq_cutoff,
             "output|o=s"    => \$outfile,
             "Raw|R"         => \$raw_output,
             "blood|b"       => \$blood,
+            "ped_match|p"   => \$ped_match,
             "reads|r=i"     => \$read_count,
             "nocall|n"      => \$nocall,
             "version|v"     => \$ver_info,
@@ -103,6 +106,10 @@ if ( $outfile ) {
     $out_fh = \*STDOUT;
 }
 
+# Now that we have more than one study with this assay, need to configure some specific params.
+my $study;
+($ped_match or $blood) ? ($study = 'pediatric') : ($study = 'adult');
+
 if (DEBUG) {
     print "======================================  DEBUG  ======================================\n";
     print "Params as passed into script:\n";
@@ -110,6 +117,8 @@ if (DEBUG) {
     print "\tVAF Threshold    => $freq_cutoff\n";
     print "\tFusion Threshold => $read_count\n";
     print "\tOutput File      => ";
+    print "\tStudy            => $study\n";
+    print "\tPediatric Blood  => $blood\n";
     ($outfile) ? print " $outfile\n" : print "\n";
     print "=====================================================================================\n\n";
 }
@@ -220,32 +229,33 @@ sub proc_snv_indel {
         
         #next unless $gene eq 'ERBB2';
         if ( $vaf >= $freq_cutoff ) {
-            #dd \@fields and next;
             # Anything that's a hotspot
             if ( $hotspot_id ne '.' or $ocp_vc eq 'Hotspot' ) {
                 $results{$id} = gen_var_entry(\@fields, 'Hotspot Variant');
             }
             # De Novo TSG frameshift calls
-            #elsif ( grep {$ocp_vc eq $_} @oncomine_vc ) {
             elsif ( $ocp_vc eq 'Deleterious' ) {
                 $results{$id} = gen_var_entry(\@fields, 'Deleterious in TSG');
             }
             # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
             elsif ( $gene eq 'EGFR' ) { 
+                next if $study eq 'pediatric';
                 if ( $exon eq '19' && $function eq 'nonframeshiftDeletion' ) {
-                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftDeletion in Exon 19');
+                    $results{$id} = gen_var_entry(\@fields, 'EGFR in-frame deletion in Exon 19');
                 }
                 elsif ($exon eq '20' && $function eq 'nonframeshiftInsertion') {
-                    $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 20');
+                    $results{$id} = gen_var_entry(\@fields, 'EGFR in-frame insertion in Exon 20');
                 }
             }
             # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
             elsif ( $gene eq 'ERBB2' && $exon eq '20' && $function eq 'nonframeshiftInsertion' ) {
-                $results{$id} = gen_var_entry(\@fields, 'nonframeshiftInsertion in Exon 20');
+                next if $study eq 'pediatric';
+                $results{$id} = gen_var_entry(\@fields, 'ERBB2 in-frame insertion in Exon 20');
             }
             # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
             elsif ( $gene eq 'KIT' && (grep $exon eq $_, ('9','11')) && $function =~ /nonframeshift.*/ ) {
-                $results{$id} = gen_var_entry(\@fields, 'nonframeshiftIndel in Exon 9 or 11 of KIT');
+                next if $study eq 'pediatric';
+                $results{$id} = gen_var_entry(\@fields, 'KIT in-frame indel in Exon 9 or 11');
             }
         }
     }
@@ -426,8 +436,11 @@ sub gen_report {
     ##    Report Header    ##
     #########################
     my ($dna_name, $rna_name) = $vcf_filename =~ /^(?:.*\/)?(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
+    my $study_title;
+    ($study eq 'pediatric') ? ($study_title = 'Pediatric NCI-MATCH') : ($study_title = 'Adult NCI-MATCH');
     print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
-    print_msg('NCI-MATCH MOI Report for ', 'bold ansi15');
+    #print_msg('NCI-MATCH MOI Report for ', 'bold ansi15');
+    print_msg("$study_title MOI Report for ", 'bold ansi15');
     (! $dna_name || ! $rna_name) ? print_msg("$vcf_filename\n", 'bold ansi15') : print_msg("$dna_name DNA / $rna_name RNA\n", 'bold ansi15');
     print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
 
