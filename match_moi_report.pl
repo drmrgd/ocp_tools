@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.4.0_051817";
+my $version = "v5.5.0_051817";
 
 # Remove when in prod.
 #print "\n";
@@ -133,13 +133,13 @@ for my $prog (@required_programs) {
 my $vcf_file = shift;
 die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e $vcf_file;
 
-my $snv_indel_data          = proc_snv_indel(\$vcf_file);
-my $cnv_data                = proc_cnv(\$vcf_file);
-my $fusion_data             = proc_fusion(\$vcf_file) unless $blood;  # Can not run fusion panel on blood specimens since no RNA.
-
 my $current_version = version->parse('2.3');
 my $assay_version = version->parse( vcf_version_check(\$vcf_file) );
 print "[INFO]: OVAT version: $assay_version\n" if DEBUG;
+
+my $snv_indel_data          = proc_snv_indel(\$vcf_file);
+my $cnv_data                = proc_cnv(\$vcf_file);
+my $fusion_data             = proc_fusion(\$vcf_file) unless $blood;  # Can not run fusion panel on blood specimens since no RNA.
 
 unless ($blood) {
     if ($assay_version >= $current_version) {
@@ -154,9 +154,12 @@ unless ($blood) {
 ($raw_output) ? raw_output($snv_indel_data,$fusion_data,$cnv_data) : gen_report($vcf_file,$snv_indel_data,$fusion_data,$cnv_data);
 
 sub vcf_version_check {
+    # Check the VCF version, as well as, determining if we loaded a DNA only file and asked for both DNA and RNA data.
     my $vcf = shift;
     open(my $vcf_fh, "<", $$vcf);
-    my ($ovat_ver) = map { /^##OncomineVariantAnnotationToolVersion=(\d+\.\d+)\.\d+/ } <$vcf_fh>;
+    my @header = grep{ /^#/ } <$vcf_fh>;
+    die "ERROR: You have tried to load a VCF file witout fusion data and without selecting the DNA only option!\n" unless grep {/##FusionSampleQC/} @header or $blood;
+    my ($ovat_ver) = map { /^##OncomineVariantAnnotationToolVersion=(\d+\.\d+)\.\d+/ } @header;
     return $ovat_ver;
 }
 
