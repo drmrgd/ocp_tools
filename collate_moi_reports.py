@@ -14,7 +14,7 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.6.0_051917'
+version = '2.7.0_051917'
 debug = False 
 
 def get_args():
@@ -114,7 +114,8 @@ def pad_list(data_list,data_type):
         for i in [0,1,8,9]:
             tmp_list[i] = data_list.pop()
     elif data_type == 'fusions':
-        for i in [0,3,7,8,10]:
+        # for i in [0,3,7,8,10]:
+        for i in [0,7,3,8,10]:
             tmp_list[i] = data_list.pop()
     return tmp_list
 
