@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.3.0_051817";
+my $version = "v5.4.0_051817";
 
 # Remove when in prod.
 #print "\n";
@@ -219,6 +219,7 @@ sub proc_snv_indel {
         my $gene       = $fields[8];
         my $ocp_vc     = $fields[15];
         my $hotspot_id = $fields[7];
+        my $aa_change  = $fields[11];
         my $function;
         ($fields[13] eq '---') ? ($function = $fields[12] and $fields[13] = $fields[12]) : ($function = $fields[13]);
 
