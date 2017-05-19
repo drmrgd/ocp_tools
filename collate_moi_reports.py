@@ -14,7 +14,7 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.5.1_051017'
+version = '2.6.0_051917'
 debug = False 
 
 def get_args():
@@ -28,7 +28,7 @@ def get_args():
             version = '%(prog)s - ' + version,
             )
     parser.add_argument('vcf_files', nargs='+', help='List of VCF files to process.')
-    parser.add_argument('-p', '--procs', default='24', metavar='<num_procs>',
+    parser.add_argument('-j', '--procs', default='24', metavar='<num_procs>',
             help='Number of processes to run. Input 0 if you want do not want to perform threaded processing. DEFAULT: %(default)s')
     parser.add_argument('-q','--quiet', action='store_false', default=True, 
             help='Do not suppress warning and extra output')
@@ -41,6 +41,7 @@ def get_args():
     parser.add_argument('--reads', default=100, metavar='INT', 
             help='Threshold for number of fusion reads to report. DEFAULT: %(default)s')
     parser.add_argument('-o','--output', help='Output to file rather than STDOUT ***NOT YET IMPLEMENTED***')
+    parser.add_argument('-p', '--pedmatch', action='store_true', help='Data comes from Pediatric MATCH rather than Adult MATCH (default).')
     args = parser.parse_args()
 
     if args.cn:
@@ -75,11 +76,14 @@ def parse_cnv_params(cu,cl,cn):
             params_list.extend([k,str(v)])
     return params_list
 
-def gen_moi_report(vcf,cnv_args,reads,proc_type):
+def gen_moi_report(vcf,cnv_args,reads,proc_type,study=None):
     '''Use MATCH MOI Reporter to generate a variant table we can parse later. Gen CLI Opts to determine
     what params to run match_moi_report with'''
     (dna,rna) = get_names(vcf)
     thresholds = cnv_args + ['-r', str(reads), '-R']
+    if study == '-p':
+        thresholds.append('-p')
+
     moi_report_cmd = ['match_moi_report.pl'] + thresholds + [vcf]
     p=subprocess.Popen(moi_report_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result,error = p.communicate()
@@ -154,15 +158,15 @@ def print_data(var_type,data,outfile):
 def arg_star(args):
     return gen_moi_report(*args)
 
-def non_threaded_proc(vcf_files,cnv_args,reads):
+def non_threaded_proc(vcf_files,cnv_args,reads,study):
     '''If for some reason we only want to use a single thread / proc to do this'''
     moi_data = defaultdict(dict)
     for x in vcf_files:
         print 'processing %s...' %  x
-        moi_data[x] = gen_moi_report(x,cnv_args,reads,'single')
+        moi_data[x] = gen_moi_report(x,cnv_args,reads,'single',study)
     return moi_data
 
-def threaded_proc(vcf_files,cnv_params,reads):
+def threaded_proc(vcf_files,cnv_params,reads,study):
     pool = ThreadPool(48)
     moi_data = defaultdict(dict)
     task_list = [(x,cnv_params,str(reads),'threaded') for x in vcf_files]
@@ -181,10 +185,14 @@ def print_title(fh,**kwargs):
     string_params = '='.join([str(x).lstrip('--') for x in cnv_params])
     if 'cl' in string_params:
         string_params = string_params.replace('=cl','; cl')
+    if kwargs['pedmatch']:
+        study_name = 'Pediatric MATCH'
+    else:
+        study_name = 'Adult MATCH'
 
-    fh.write('-'*80)
-    fh.write('\nCollated MOI Reports Using Params CNV: {}, Fusion Reads: reads={}\n'.format(string_params,kwargs['reads']))
-    fh.write('-'*80)
+    fh.write('-'*95)
+    fh.write('\nCollated {} MOI Reports Using Params CNV: {}, Fusion Reads: reads={}\n'.format(study_name,string_params,kwargs['reads']))
+    fh.write('-'*95)
     fh.write('\n')
     return
 
@@ -209,9 +217,9 @@ def main():
     cnv_args = parse_cnv_params(args.cu,args.cl,args.cn)
 
     if args.procs == '0':
-        moi_data = non_threaded_proc(args.vcf_files,cnv_args,args.reads)
+        moi_data = non_threaded_proc(args.vcf_files,cnv_args,args.reads,args.pedmatch)
     else:
-        moi_data = threaded_proc(args.vcf_files,cnv_args,args.reads)
+        moi_data = threaded_proc(args.vcf_files,cnv_args,args.reads,args.pedmatch)
 
     header = ['Sample','Gene','Position','Ref','Alt','Transcript','CDS','AA','VARID','Type','VAF/CN','Coverage/Counts','RefCov','AltCov']
     outfile.write(','.join(header) + "\n")
