@@ -14,7 +14,7 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.7.0_051917'
+version = '2.8.0_051917'
 debug = False 
 
 def get_args():
@@ -42,6 +42,7 @@ def get_args():
             help='Threshold for number of fusion reads to report. DEFAULT: %(default)s')
     parser.add_argument('-o','--output', help='Output to file rather than STDOUT ***NOT YET IMPLEMENTED***')
     parser.add_argument('-p', '--pedmatch', action='store_true', help='Data comes from Pediatric MATCH rather than Adult MATCH (default).')
+    parser.add_argument('-b', '--blood', action='store_true', help='Data comes from blood specimens, and therefore we only have DNA data.')
     args = parser.parse_args()
 
     if args.cn:
@@ -76,12 +77,22 @@ def parse_cnv_params(cu,cl,cn):
             params_list.extend([k,str(v)])
     return params_list
 
-def gen_moi_report(vcf,cnv_args,reads,proc_type,study=None):
+def gen_moi_report(vcf,cnv_args,reads,proc_type,study,blood):
     '''Use MATCH MOI Reporter to generate a variant table we can parse later. Gen CLI Opts to determine
     what params to run match_moi_report with'''
     (dna,rna) = get_names(vcf)
-    thresholds = cnv_args + ['-r', str(reads), '-R']
-    if study == '-p':
+
+    # thresholds = cnv_args + ['-r', str(reads), '-R']
+    thresholds = cnv_args
+
+    # Determine if blood or tumor and add appropriate thresholds
+    if not blood:
+        thresholds += ['-r', str(reads), '-R']
+    else:
+        thresholds.append('-Rb')
+
+    # If Pediatric MATCH need to pass different MOI rules.
+    if study:
         thresholds.append('-p')
 
     moi_report_cmd = ['match_moi_report.pl'] + thresholds + [vcf]
@@ -159,18 +170,18 @@ def print_data(var_type,data,outfile):
 def arg_star(args):
     return gen_moi_report(*args)
 
-def non_threaded_proc(vcf_files,cnv_args,reads,study):
+def non_threaded_proc(vcf_files,cnv_args,reads,study,blood):
     '''If for some reason we only want to use a single thread / proc to do this'''
     moi_data = defaultdict(dict)
     for x in vcf_files:
         print 'processing %s...' %  x
-        moi_data[x] = gen_moi_report(x,cnv_args,reads,'single',study)
+        moi_data[x] = gen_moi_report(x,cnv_args,reads,'single',study,blood)
     return moi_data
 
-def threaded_proc(vcf_files,cnv_params,reads,study):
+def threaded_proc(vcf_files,cnv_params,reads,study,blood):
     pool = ThreadPool(48)
     moi_data = defaultdict(dict)
-    task_list = [(x,cnv_params,str(reads),'threaded') for x in vcf_files]
+    task_list = [(x,cnv_params,str(reads),'threaded',study,blood) for x in vcf_files]
     try:
         moi_data = {vcf : data for vcf,data in pool.imap_unordered(arg_star,task_list)}
     except Exception:
@@ -211,17 +222,17 @@ def main():
         outfile = open(args.output, 'w')
     else:
         outfile = sys.stdout
-    
-    print_title(outfile,**vars(args))
 
     # handle complex CNV args
     cnv_args = parse_cnv_params(args.cu,args.cl,args.cn)
 
     if args.procs == '0':
-        moi_data = non_threaded_proc(args.vcf_files,cnv_args,args.reads,args.pedmatch)
+        moi_data = non_threaded_proc(args.vcf_files,cnv_args,args.reads,args.pedmatch,args.blood)
     else:
-        moi_data = threaded_proc(args.vcf_files,cnv_args,args.reads,args.pedmatch)
+        moi_data = threaded_proc(args.vcf_files,cnv_args,args.reads,args.pedmatch,args.blood)
 
+    # Print data
+    print_title(outfile,**vars(args))
     header = ['Sample','Gene','Position','Ref','Alt','Transcript','CDS','AA','VARID','Type','VAF/CN','Coverage/Counts','RefCov','AltCov']
     outfile.write(','.join(header) + "\n")
     
