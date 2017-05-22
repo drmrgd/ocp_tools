@@ -69,7 +69,7 @@ if ( scalar( @ARGV ) < 1 ) {
 die "ERROR: You must choose either 'pp' or 'csv' for report format with the '-f' option!\n" if ($format ne 'pp' && $format ne 'csv');
 
 # Validate site input
-my @valid_sites = qw(NCI MDA YSM MGH);
+my @valid_sites = qw(NCI MDA YSM MGH DRT);
 if ($sequencing_site) {
     $sequencing_site = uc($sequencing_site);
     die "ERROR: Invalid site '$sequencing_site'!\n" unless grep { $sequencing_site eq $_ } @valid_sites;
@@ -258,11 +258,12 @@ sub generate_report {
 sub get_site_name {
     my $sample_string = shift;
     my %sites = (
-        'MoCha'  => 'NCI',
-        'MDACC'  => 'MDA',
-        'MGH',   => 'MGH',
-        'Yale'   => 'YSM',
-        'NA'     => '---',
+        'MoCha'      => 'NCI',
+        'MDACC'      => 'MDA',
+        'MGH',       => 'MGH',
+        'Yale'       => 'YSM',
+        'Dartmouth'  => 'DRT',
+        'NA'         => '---',
     );
     (my $site) = $sample_string =~ /^SampleControl_(\w+?)_\d+/;
     $site //= 'NA';
