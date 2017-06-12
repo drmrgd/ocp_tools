@@ -16,7 +16,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v4.0.0_032917";
+my $version = "v4.0.1_0612017";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
 anything seen, or just limit to annotated fusions.
@@ -147,9 +147,11 @@ for my $sample ( sort keys %results ) {
 
 sub proc_vcf {
     my $vcf = shift;
-    my @drivers = qw(AKT2 ALK AR AXL BRAF BRCA1 BRCA2 CDKN2A EGFR ERBB2 ERBB4 ERG ESR1 ETV1 ETV4 ETV5 FGFR1 FGFR2
-                     FGFR3 FGR FLT3 JAK2 KRAS MDM4 MET MYB MYBL1 NF1 NOTCH1 NOTCH4 NRG1 NTRK1 NTRK2 NTRK3 NUTM1
-                     PDGFRA PDGFRB PIK3CA PPARG PRKACA PRKACB PTEN RAD51B RAF1 RB1 RELA RET ROS1 RSPO2 RSPO3 TERT
+    # Version 1,2, and 3 drivers. Not all exist in the current version, but keep all for backward compatibility.
+    my @drivers = qw(ABL1 AKT2 AKT3 ALK AR AXL BRAF BRCA1 BRCA2 CDKN2A EGFR ERBB2 ERBB4 ERG ESR1 ETV1 ETV1a 
+                     ETV1b ETV4 ETV4a ETV5 ETV5a ETV5d FGFR1 FGFR2 FGFR3 FGR FLT3 JAK2 KRAS MDM4 MET MYB MYBL1 
+                     NF1 NOTCH1 NOTCH4 NRG1 NTRK1 NTRK2 NTRK3 NUTM1 PDGFRA PDGFRB PIK3CA PPARG PRKACA PRKACB 
+                     PTEN RAD51B RAF1 RB1 RELA RET ROS1 RSPO2 RSPO3 TERT
     );
 
     my %results;
