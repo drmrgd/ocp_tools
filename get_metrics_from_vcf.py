@@ -86,7 +86,16 @@ def get_name(vcf):
     sample_name = ''
     dna_name = ''
     rna_name = ''
+    vcf_name = vcf.rstrip('.vcf')
 
+    # print('sample name: %s' % get_name_from_vcf(vcf))
+    return get_name_from_vcf(vcf)
+
+    '''
+    # Dump this code.  It never seems to work 100% of the time since naming is completely random, and 
+    # I just don't have patience and time to constantly be messing with this.  Now just read the sample
+    # from the VCF and report that.  If we have mixed DNA and RNA specimens, then it is what it is.
+    
     # If this is MATCHBox data, we always start with 'MSN####'
     if name_elems[0].startswith('MSN'):
         return name_elems[0]
@@ -102,13 +111,26 @@ def get_name(vcf):
                 dna_name += '-DNA'
         except:
             #sys.stderr.write("WARN: Can not determine DNA sample name from VCF filename. Using filename instead\n")
-            vcf_name = vcf.rstrip('.vcf')
+            # vcf_name = vcf.rstrip('.vcf')
+            pass
+
+    print('name_elems: %s' % name_elems)
+    print('dna_name:   %s' % dna_name)
+    print('rna_name:   %s' % rna_name)
+    print('vcf_name:   %s' % vcf_name)
 
     if dna_name and rna_name:
         sample_name = '_'.join([dna_name,rna_name])
     else:
         sample_name = vcf_name
     return (sample_name) 
+    '''
+
+def get_name_from_vcf(vcf):
+    with open(vcf) as fh:
+        for line in fh:
+            if line.startswith('#CHROM'):
+                return line.split('\t')[-1].rstrip('\n')
 
 def col_size(data):
     col_width = 0
