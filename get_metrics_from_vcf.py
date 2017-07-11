@@ -15,7 +15,7 @@ import math
 from pprint import pprint as pp
 from distutils.version import LooseVersion
 
-version = '3.4.0_071117'
+version = '3.5.0_071117'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -27,6 +27,8 @@ def get_args():
         version = '%(prog)s  - ' + version,
     )
     parser.add_argument('vcf', metavar='<VCF(s)>', nargs='+', help='VCF file(s) to process')
+    parser.add_argument('-d','--dna_only', action='store_true', 
+            help='Data comes from DNA only specimens and no RNA data to report. Essentially reporting MAPD only.')
     parser.add_argument('-o', '--output', metavar='<outfile>', help='Custom output file (DEFAULT: %(default)s)')
     args = parser.parse_args()
     return args
@@ -109,7 +111,7 @@ def col_size(data):
             col_width = len(i)
     return col_width + 4
 
-def print_data(results,outfile):
+def print_data(results,outfile,dna_only):
     # Figure out if we have two different versions of analysis, and if so bail out to make easier.
     l = [len(v) for k,v in results.iteritems()]
     if len(set(l)) > 1:
@@ -117,13 +119,27 @@ def print_data(results,outfile):
               'Please run separately and cat the data later.')
         sys.exit(1)
 
-    header_elems = ['Date','MAPD','RNA_Reads','Expr_Sum']
-    fstring = '{:14}{:10}{:14}{:14}\n' 
+    # Check to make sure we didn't really mean to use DNA only.
+    if not dna_only:
+        for sample in results:
+            try:
+                tmp_reads = results[sample]['RNA_Reads']
+            except KeyError:
+                print('ERROR: DNA only specimen(s) detected.  You must runs these using the "--dna_only" option!')
+                sys.exit(1)
+
     outfile.write('{sample:{width}}'.format(sample='Sample', width=col_size(results)))
 
-    if l[0] == 6:
-        fstring = fstring.replace('\n','{:14}{:14}\n')
-        header_elems += ['Pool1','Pool2']
+    header_elems = ['Date','MAPD','RNA_Reads','Expr_Sum']
+
+    if dna_only:
+        header_elems = header_elems[0:2]
+        fstring = '{:14}{:10}\n'
+    else:
+        fstring = '{:14}{:10}{:14}{:14}\n' 
+        if l[0] == 6:
+            fstring = fstring.replace('\n','{:14}{:14}\n')
+            header_elems += ['Pool1','Pool2']
 
     outfile.write(fstring.format(*header_elems))
 
@@ -145,7 +161,7 @@ def main():
     for vcf in args.vcf:
         sample_name = get_name_from_vcf(vcf)
         results[sample_name] = read_vcf(vcf)
-    print_data(results,out_fh)
+    print_data(results,out_fh,args.dna_only)
 
 if __name__=='__main__':
     main()
