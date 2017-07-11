@@ -15,7 +15,7 @@ import math
 from pprint import pprint as pp
 from distutils.version import LooseVersion
 
-version = '3.3.2_031017'
+version = '3.4.0_071117'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -42,10 +42,16 @@ def read_vcf(vcf_file):
                 if not line.startswith('#') and 'SVTYPE=ExprControl' not in line:
                     continue
                 elif line.startswith('##mapd='):
-                    fetched_data['MAPD'] = (get_value(line.rstrip()))
+                    mapd = get_value(line.rstrip())
+                    if float(mapd) > 0.5:
+                        mapd = flag_val(mapd)
+                    fetched_data['MAPD'] = mapd
 
                 elif line.startswith('##TotalMappedFusionPanelReads='):
-                    fetched_data['RNA_Reads'] = (get_value(line.rstrip()))
+                    rna_reads = get_value(line.rstrip())
+                    if int(rna_reads) < 100000:
+                        rna_reads = flag_val(rna_reads)
+                    fetched_data['RNA_Reads'] = rna_reads
 
                 elif line.startswith('##fileDate'):
                     date = datetime.datetime.strptime(get_value(line.rstrip()),"%Y%M%d")
@@ -56,75 +62,39 @@ def read_vcf(vcf_file):
                     ovat_version = get_value(line.rstrip())
                     if LooseVersion(ovat_version) > LooseVersion(oca_v3_version):
                         p1,p2 = get_rna_pool_info(vcf_file)
+                        if int(p1) < 100000:
+                            p1 = flag_val(p1)
+                        if int(p2) < 100000:
+                            p2 = flag_val(p2)
                         fetched_data['Pool1'] = p1
                         fetched_data['Pool2'] = p2
 
                 elif re.search('SVTYPE=ExprControl',line):
                     read_count = re.search('READ_COUNT=(\d+).*',line).group(1)
                     expr_sum += int(read_count)
-            fetched_data['Expr_Sum'] = str(expr_sum)
+                    if expr_sum < 20000:
+                        expr_sum = flag_val(str(expr_sum))
+                    fetched_data['Expr_Sum'] = str(expr_sum)
+
     except IOError as e:
         sys.stderr.write('ERROR: Can not open file {}: {}!\n'.format(vcf_file,e))
         sys.exit()
     return fetched_data
+
+def flag_val(val):
+    return '*' + val + '*'
 
 def get_rna_pool_info(vcf):
     p = subprocess.Popen(['match_rna_qc.pl', vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (data,err) = p.communicate()
     ret_res = data.split('\n')
     results = dict(zip(ret_res[0].split(','),ret_res[1].split(',')))
-    # return int(round(float(results['pool1_total']))), int(round(float(results['pool2_total'])))
     p1_tot = str(round(float(results['pool1_total'])))
     p2_tot = str(round(float(results['pool2_total'])))
     return p1_tot.split('.')[0], p2_tot.split('.')[0]
 
 def get_value(line):
     return line.split('=')[1]
-
-def get_name(vcf):
-    name_elems = vcf.split('_')
-    sample_name = ''
-    dna_name = ''
-    rna_name = ''
-    vcf_name = vcf.rstrip('.vcf')
-
-    # print('sample name: %s' % get_name_from_vcf(vcf))
-    return get_name_from_vcf(vcf)
-
-    '''
-    # Dump this code.  It never seems to work 100% of the time since naming is completely random, and 
-    # I just don't have patience and time to constantly be messing with this.  Now just read the sample
-    # from the VCF and report that.  If we have mixed DNA and RNA specimens, then it is what it is.
-    
-    # If this is MATCHBox data, we always start with 'MSN####'
-    if name_elems[0].startswith('MSN'):
-        return name_elems[0]
-
-    try:
-        if name_elems[0] == name_elems[2]:
-            dna_name = name_elems[0]
-            rna_name = name_elems[2]
-    except IndexError:
-        try:
-            (dna_name, rna_name) = re.search(r'^(.*?(?:DNA|_v\d)?)_(.*?RNA).*$',vcf).group(1,2)
-            if not dna_name.endswith('DNA'):
-                dna_name += '-DNA'
-        except:
-            #sys.stderr.write("WARN: Can not determine DNA sample name from VCF filename. Using filename instead\n")
-            # vcf_name = vcf.rstrip('.vcf')
-            pass
-
-    print('name_elems: %s' % name_elems)
-    print('dna_name:   %s' % dna_name)
-    print('rna_name:   %s' % rna_name)
-    print('vcf_name:   %s' % vcf_name)
-
-    if dna_name and rna_name:
-        sample_name = '_'.join([dna_name,rna_name])
-    else:
-        sample_name = vcf_name
-    return (sample_name) 
-    '''
 
 def get_name_from_vcf(vcf):
     with open(vcf) as fh:
@@ -143,15 +113,16 @@ def print_data(results,outfile):
     # Figure out if we have two different versions of analysis, and if so bail out to make easier.
     l = [len(v) for k,v in results.iteritems()]
     if len(set(l)) > 1:
-        print('Mixed version VCFs detected!  We can not process two different versions together!  Please run separately and cat the data later.')
+        print('Mixed version VCFs detected!  We can not process two different versions together!  '
+              'Please run separately and cat the data later.')
         sys.exit(1)
 
     header_elems = ['Date','MAPD','RNA_Reads','Expr_Sum']
-    fstring = '{:12}{:8}{:12}{:12}\n' 
+    fstring = '{:14}{:10}{:14}{:14}\n' 
     outfile.write('{sample:{width}}'.format(sample='Sample', width=col_size(results)))
 
     if l[0] == 6:
-        fstring = fstring.replace('\n','{:12}{:12}\n')
+        fstring = fstring.replace('\n','{:14}{:14}\n')
         header_elems += ['Pool1','Pool2']
 
     outfile.write(fstring.format(*header_elems))
@@ -172,9 +143,8 @@ def main():
 
     results = {}
     for vcf in args.vcf:
-        sample_name = get_name(vcf)
+        sample_name = get_name_from_vcf(vcf)
         results[sample_name] = read_vcf(vcf)
-
     print_data(results,out_fh)
 
 if __name__=='__main__':
