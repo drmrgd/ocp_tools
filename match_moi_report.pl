@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.5.0_051817";
+my $version = "v5.6.0_071217";
 
 # Remove when in prod.
 #print "\n";
@@ -257,9 +257,9 @@ sub proc_snv_indel {
                 $results{$id} = gen_var_entry(\@fields, 'ERBB2 in-frame insertion in Exon 20');
             }
             # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
-            elsif ( $gene eq 'KIT' && (grep $exon eq $_, ('9','11')) && $function =~ /nonframeshift.*/ ) {
+            elsif ( $gene eq 'KIT' && (grep $exon eq $_, ('9','11','13','14')) && ($function =~ /nonframeshift.*/ || $function eq 'missense') ) {
                 next if $study eq 'pediatric';
-                $results{$id} = gen_var_entry(\@fields, 'KIT in-frame indel in Exon 9 or 11');
+                $results{$id} = gen_var_entry(\@fields, 'KIT in-frame indel in Exons 9, 11, 13, or 14');
             }
         }
     }
