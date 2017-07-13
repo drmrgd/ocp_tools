@@ -15,7 +15,7 @@ import math
 from pprint import pprint as pp
 from distutils.version import LooseVersion
 
-version = '3.5.0_071117'
+version = '3.5.1_071317'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -74,9 +74,10 @@ def read_vcf(vcf_file):
                 elif re.search('SVTYPE=ExprControl',line):
                     read_count = re.search('READ_COUNT=(\d+).*',line).group(1)
                     expr_sum += int(read_count)
-                    if expr_sum < 20000:
-                        expr_sum = flag_val(str(expr_sum))
-                    fetched_data['Expr_Sum'] = str(expr_sum)
+
+            if expr_sum < 20000:
+                expr_sum = flag_val(str(expr_sum))
+            fetched_data['Expr_Sum'] = expr_sum
 
     except IOError as e:
         sys.stderr.write('ERROR: Can not open file {}: {}!\n'.format(vcf_file,e))
