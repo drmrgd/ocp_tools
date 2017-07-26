@@ -15,7 +15,7 @@ import math
 from pprint import pprint as pp
 from distutils.version import LooseVersion
 
-version = '3.5.1_071317'
+version = '3.5.2_072617'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -135,11 +135,11 @@ def print_data(results,outfile,dna_only):
 
     if dna_only:
         header_elems = header_elems[0:2]
-        fstring = '{:14}{:10}\n'
+        fstring = '{:<14}{:<10}\n'
     else:
-        fstring = '{:14}{:10}{:14}{:14}\n' 
+        fstring = '{:<14}{:<10}{:<14}{:<14}\n' 
         if l[0] == 6:
-            fstring = fstring.replace('\n','{:14}{:14}\n')
+            fstring = fstring.replace('\n','{:<14}{:<14}\n')
             header_elems += ['Pool1','Pool2']
 
     outfile.write(fstring.format(*header_elems))
