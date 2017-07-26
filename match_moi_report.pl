@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v5.6.0_071217";
+my $version = "v5.6.2_072617";
 
 # Remove when in prod.
 #print "\n";
@@ -158,6 +158,7 @@ sub vcf_version_check {
     my $vcf = shift;
     open(my $vcf_fh, "<", $$vcf);
     my @header = grep{ /^#/ } <$vcf_fh>;
+    die "ERROR: The input file '$$vcf' does not appear to be a valid VCF file!\n" unless @header;
     die "ERROR: You have tried to load a VCF file witout fusion data and without selecting the DNA only option!\n" unless grep {/##FusionSampleQC/} @header or $blood;
     my ($ovat_ver) = map { /^##OncomineVariantAnnotationToolVersion=(\d+\.\d+)\.\d+/ } @header;
     return $ovat_ver;
