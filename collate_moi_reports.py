@@ -4,6 +4,11 @@
 #
 # 2/11/2014
 #######################################################################################################################
+"""
+Collect MOI reports for a set of VCF files and output a raw CSV formatted output that can be
+easily imported into Microsoft Excel for reporting.  This script relies on `match_moi_report.pl`
+in order to generate the MOI reports for each.
+"""
 import sys
 import os
 import re
@@ -14,35 +19,44 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.8.0_051917'
+version = '2.9.103017'
 debug = False 
 
 def get_args():
+    # Default thresholds. Put them here rather than fishing below.
+    num_procs = '24'
+    cn = 7
+    cu = None
+    cl = None
+    reads = 1000
+
     parser = argparse.ArgumentParser(
             formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position = 100, width=200),
-            description = '''
-            Collect MOI reports for a set of VCF files and output a raw CSV formatted output that can be
-            easily imported into Microsoft Excel for reporting.  This script relies on `match_moi_report.pl`
-            in order to generate the MOI reports for each.
-            ''',
-            version = '%(prog)s - ' + version,
-            )
+            description = __doc__,
+    )
     parser.add_argument('vcf_files', nargs='+', help='List of VCF files to process.')
-    parser.add_argument('-j', '--procs', default='24', metavar='<num_procs>',
-            help='Number of processes to run. Input 0 if you want do not want to perform threaded processing. DEFAULT: %(default)s')
+    parser.add_argument('-j', '--procs', default=num_procs, metavar='<num_procs>',
+        help='Number of processes to run. Input 0 if you want do not want to perform threaded processing. '
+            'DEFAULT: %(default)s')
     parser.add_argument('-q','--quiet', action='store_false', default=True, 
-            help='Do not suppress warning and extra output')
-    parser.add_argument('--cn', metavar='INT', 
-            help='Use copy number (CN) value for CNV reporting to be more compatible with MATCH rules. This will disable CU and CL thresholds and is off by default')
-    parser.add_argument('--cu', default=4, metavar='INT', 
-            help='Copy number threshold (5%% CI lower bound) to pass to match_moi_report for reporting amplifications. DEFAULT: %(default)s')
-    parser.add_argument('--cl', default=1, metavar='INT',
-            help='Copy number threshold (95%% CI upper bound) to pass to match_moi_report for reporting copy loss. DEFAULT: %(default)s')
-    parser.add_argument('--reads', default=100, metavar='INT', 
-            help='Threshold for number of fusion reads to report. DEFAULT: %(default)s')
-    parser.add_argument('-o','--output', help='Output to file rather than STDOUT ***NOT YET IMPLEMENTED***')
-    parser.add_argument('-p', '--pedmatch', action='store_true', help='Data comes from Pediatric MATCH rather than Adult MATCH (default).')
-    parser.add_argument('-b', '--blood', action='store_true', help='Data comes from blood specimens, and therefore we only have DNA data.')
+        help='Do not suppress warning and extra output')
+    parser.add_argument('--cn', metavar='INT', default = cn,
+        help='Use copy number (CN) value for CNV reporting to be more compatible with MATCH rules. This '
+            'will disable CU and CL thresholds and is on by default')
+    parser.add_argument('--cu', default=cu, metavar='INT', 
+        help='Copy number threshold (5%% CI lower bound) to pass to match_moi_report for reporting '
+            'amplifications. DEFAULT: %(default)s')
+    parser.add_argument('--cl', default=cl, metavar='INT',
+        help='Copy number threshold (95%% CI upper bound) to pass to match_moi_report for reporting copy '
+            'loss. DEFAULT: %(default)s')
+    parser.add_argument('--reads', default=reads, metavar='INT', 
+        help='Threshold for number of fusion reads to report. DEFAULT: %(default)s')
+    parser.add_argument('-o','--output', help='Output to file rather than STDOUT.')
+    parser.add_argument('-p', '--pedmatch', action='store_true', 
+        help='Data comes from Pediatric MATCH rather than Adult MATCH (default).')
+    parser.add_argument('-b', '--blood', action='store_true', 
+        help='Data comes from blood specimens, and therefore we only have DNA data.')
+    parser.add_argument('-v', '--version', action='version', version = '%(prog)s - ' + version)
     args = parser.parse_args()
 
     if args.cn:
