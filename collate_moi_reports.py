@@ -19,7 +19,7 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.9.103017'
+version = '2.10.110117'
 debug = False 
 
 def get_args():
@@ -125,9 +125,12 @@ def gen_moi_report(vcf,cnv_args,reads,proc_type,study,blood):
 
 def populate_list(var_type,var_data):
     wanted_fields = {
-        'snv'     : [9,1,2,3,10,11,12,8,0,4,5,6,7],
-        'cnv'     : [1,2,0,5],
-        'fusions' : [4,2,1,0,3]
+        # 'snv'     : [9,1,2,3,10,11,12,8,0,4,5,6,7],
+        'snv'     : [0,9,1,2,3,10,11,12,8,4,5,6,7],
+        # 'cnv'     : [1,2,0,5],
+        'cnv'     : [0,1,2,5],
+        # 'fusions' : [4,2,1,0,3]
+        'fusions' : [0,4,2,1,3]
     }
     return [var_data[x] for x in wanted_fields[var_type]]
 
@@ -136,11 +139,14 @@ def pad_list(data_list,data_type):
     tmp_list = ['-'] * 13
     data_list.reverse()
     if data_type == 'cnv':
-        for i in [0,1,8,9]:
+        # for i in [0,1,8,9]:
+        for i in [0,1,2,9]:
             tmp_list[i] = data_list.pop()
     elif data_type == 'fusions':
+        # Get rid of 
         # for i in [0,3,7,8,10]:
-        for i in [0,7,3,8,10]:
+        # for i in [0,7,3,8,10]:
+        for i in [0,1,8,4,10]:
             tmp_list[i] = data_list.pop()
     return tmp_list
 
@@ -167,7 +173,7 @@ def parse_data(report_data,dna,rna):
     # Let's still output something even if no MOIs were detected
     if not data:
         data['null']['no_result'] = [dna] + ['-']*10
-    return data
+    return dict(data)
 
 def print_data(var_type,data,outfile):
     # Split the key by a colon and sort based on chr and then pos using the natsort library
@@ -247,7 +253,8 @@ def main():
 
     # Print data
     print_title(outfile,**vars(args))
-    header = ['Sample','Gene','Position','Ref','Alt','Transcript','CDS','AA','VARID','Type','VAF/CN','Coverage/Counts','RefCov','AltCov']
+    # header = ['Sample','Gene','Position','Ref','Alt','Transcript','CDS','AA','VARID','Type','VAF/CN','Coverage/Counts','RefCov','AltCov']
+    header = ['Sample','Type','Gene','Position','Ref','Alt','Transcript','CDS','AA','VARID','VAF/CN','Coverage/Counts','RefCov','AltCov']
     outfile.write(','.join(header) + "\n")
     
     # Print out sample data by VCF
