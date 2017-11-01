@@ -15,7 +15,7 @@ import math
 from pprint import pprint as pp
 from distutils.version import LooseVersion
 
-version = '3.5.2_072617'
+version = '3.6.110117'
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -144,7 +144,7 @@ def print_data(results,outfile,dna_only):
 
     outfile.write(fstring.format(*header_elems))
 
-    for sample in results:
+    for sample in sorted(results):
         outfile.write('{sample:{width}}'.format(sample=sample,width=col_size(results)))
         out_res = [results[sample][r] for r in header_elems]
         outfile.write(fstring.format(*out_res))
