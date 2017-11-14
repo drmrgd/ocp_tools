@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 # Since I have to frequently grab this table, output a table of MAPD values for a particular VCF or set of 
 # VCF files.
 #
@@ -12,10 +13,17 @@ import datetime
 import argparse
 import subprocess
 import math
+
 from pprint import pprint as pp
 from distutils.version import LooseVersion
 
-version = '3.6.110117'
+version = '3.7.111417'
+# Flag Thresholds; Make into args at some point.
+mapd_threshold = 0.5
+rna_reads = 500000
+pool_reads = 100000
+expr_sum = 20000
+
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -33,7 +41,7 @@ def get_args():
     args = parser.parse_args()
     return args
 
-def read_vcf(vcf_file):
+def read_vcf(vcf_file, max_mapd, min_rna_reads, min_pool_reads, min_expr_sum):
     oca_v3_version = '2.3'
     expr_sum = 0
     fetched_data = {}
@@ -45,13 +53,15 @@ def read_vcf(vcf_file):
                     continue
                 elif line.startswith('##mapd='):
                     mapd = get_value(line.rstrip())
-                    if float(mapd) > 0.5:
+                    # if float(mapd) > 0.5:
+                    if float(mapd) > max_mapd:
                         mapd = flag_val(mapd)
                     fetched_data['MAPD'] = mapd
 
                 elif line.startswith('##TotalMappedFusionPanelReads='):
                     rna_reads = get_value(line.rstrip())
-                    if int(rna_reads) < 100000:
+                    # if int(rna_reads) < 100000:
+                    if int(rna_reads) < min_rna_reads:
                         rna_reads = flag_val(rna_reads)
                     fetched_data['RNA_Reads'] = rna_reads
 
@@ -64,9 +74,11 @@ def read_vcf(vcf_file):
                     ovat_version = get_value(line.rstrip())
                     if LooseVersion(ovat_version) > LooseVersion(oca_v3_version):
                         p1,p2 = get_rna_pool_info(vcf_file)
-                        if int(p1) < 100000:
+                        # if int(p1) < 100000:
+                        if int(p1) < min_pool_reads:
                             p1 = flag_val(p1)
-                        if int(p2) < 100000:
+                        # if int(p2) < 100000:
+                        if int(p2) < min_pool_reads:
                             p2 = flag_val(p2)
                         fetched_data['Pool1'] = p1
                         fetched_data['Pool2'] = p2
@@ -75,14 +87,24 @@ def read_vcf(vcf_file):
                     read_count = re.search('READ_COUNT=(\d+).*',line).group(1)
                     expr_sum += int(read_count)
 
-            if expr_sum < 20000:
+            # if expr_sum < 20000:
+            if expr_sum < min_expr_sum:
                 expr_sum = flag_val(str(expr_sum))
             fetched_data['Expr_Sum'] = expr_sum
 
     except IOError as e:
         sys.stderr.write('ERROR: Can not open file {}: {}!\n'.format(vcf_file,e))
         sys.exit()
+
+    # DEBUG
+    '''
+    print('{}  {}  {}'.format('-'*25,vcf_file,'-'*25))
+    pp(fetched_data)
+    print('-'*75)
+    print('\n')
+    '''
     return fetched_data
+
 
 def flag_val(val):
     return '*' + val + '*'
@@ -161,7 +183,9 @@ def main():
     results = {}
     for vcf in args.vcf:
         sample_name = get_name_from_vcf(vcf)
-        results[sample_name] = read_vcf(vcf)
+        # results[sample_name] = read_vcf(vcf)
+        results[sample_name] = read_vcf(vcf, mapd_threshold, rna_reads, 
+                pool_reads, expr_sum)
     print_data(results,out_fh,args.dna_only)
 
 if __name__=='__main__':
