@@ -14,7 +14,6 @@ use File::Basename;
 use Sort::Versions;
 use Term::ANSIColor;
 use Data::Dump;
-use Sort::Versions;
 
 my $scriptname = basename($0);
 my $version = "v5.6.2_072617";
