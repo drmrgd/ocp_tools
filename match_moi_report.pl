@@ -16,7 +16,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v5.6.2_072617";
+my $version = "v5.7.112217";
 
 # Remove when in prod.
 #print "\n";
@@ -184,6 +184,7 @@ sub proc_snv_indel {
         chr7:116339642:G:T
         chr7:116340262:A:G
         chr7:116411990:C:T
+        chr7:116411923:C:T
         chr9:98209628:T:TG
         chr9:139391437:TG:T
         chr9:139391975:GC:G
