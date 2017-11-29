@@ -16,7 +16,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v5.7.112217";
+my $version = "v5.8.112917";
 
 # Remove when in prod.
 #print "\n";
@@ -525,14 +525,16 @@ sub gen_report {
 
     my $pool2_sum;
     if ($$fusion_data{'P2_SUM'}) {
-    $pool2_sum = int($$fusion_data{'P2_SUM'}) and delete $$fusion_data{'P2_SUM'};
+        $pool2_sum = int($$fusion_data{'P2_SUM'}) and delete $$fusion_data{'P2_SUM'};
     }
 
     print_msg("::: MATCH Reportable Fusions (Total Mapped Reads: ",'ansi3');
     # No good version information here.  Use the presence / absence of pool specific information to deduce what version 
     # and therefore which threshold to use.
     my $rna_reads_threshold;
-    ($$fusion_data{'P1_SUM'}) ? ($rna_reads_threshold = 500000) : ($rna_reads_threshold = 100000);
+    # if we have a pool1_sum value, then it's the v3 assay and we need a higher threshold.  If not,
+    # use the v2 data.
+    ($pool1_sum) ? ($rna_reads_threshold = 500000) : ($rna_reads_threshold = 100000);
     $format_string = format_string($tot_rna_reads, '<', $rna_reads_threshold);
     print_msg(@$format_string);
 
@@ -561,7 +563,8 @@ sub gen_report {
     if ( %$fusion_data ) {
         for ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
             my ($fusion, $junct, $id) = split( /\|/ );
-            print_msg(sprintf($fusion_format, "$fusion.$junct", $id, $$fusion_data{$_}->{'COUNT'}, $$fusion_data{$_}->{'DRIVER'}, $$fusion_data{$_}->{'PARTNER'}));
+            print_msg(sprintf($fusion_format, "$fusion.$junct", $id, $$fusion_data{$_}->{'COUNT'}, 
+                    $$fusion_data{$_}->{'DRIVER'}, $$fusion_data{$_}->{'PARTNER'}));
         }
     } else {
         print_msg(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
