@@ -20,7 +20,7 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '2.11.012918'
+version = '3.0.012918'
 debug = False 
 
 def get_args():
@@ -99,14 +99,12 @@ def parse_cnv_params(cu,cl,cn):
             params_list.extend([k,str(v)])
     return params_list
 
-def gen_moi_report(vcf,cnv_args,reads,proc_type,study,blood):
+def gen_moi_report(vcf, cnv_args, reads, proc_type, study, blood):
     '''
     Use MATCH MOI Reporter to generate a variant table we can parse later. Gen 
     CLI Opts to determine what params to run match_moi_report with
     '''
-    (dna,rna) = get_names(vcf)
-
-    # thresholds = cnv_args + ['-r', str(reads), '-R']
+    (dna, rna) = get_names(vcf)
     thresholds = cnv_args
 
     # Determine if blood or tumor and add appropriate thresholds
@@ -131,9 +129,9 @@ def gen_moi_report(vcf,cnv_args,reads,proc_type,study,blood):
         # need a tuple to track threads and not crash dict entries if we're 
         # doing multithreaded processing.
         if proc_type == 'single':
-            return parse_data(result,dna,rna)
+            return parse_data(result, dna, rna, vcf)
         elif proc_type == 'threaded':
-            return vcf, parse_data(result,dna,rna)
+            return vcf, parse_data(result, dna, rna, vcf)
 
 def populate_list(var_type, var_data):
     wanted_fields = {
@@ -148,7 +146,7 @@ def pad_list(data_list, data_type):
     Pad out the list with hyphens where there is no relevent data.  Maybe kludgy, 
     but I don't know a better way
     '''
-    tmp_list = ['-'] * 13
+    tmp_list = ['-'] * 15
     data_list.reverse()
     if data_type == 'cnv':
         for i in [0,1,2,9]:
@@ -159,7 +157,24 @@ def pad_list(data_list, data_type):
             tmp_list[i] = data_list.pop()
     return tmp_list
 
-def parse_data(report_data,dna,rna):
+def get_location(pos, vcf):
+    """
+    For the cases where we need location information, like Protein Painter, re-read
+    the VCF in vcfExtractor, and get the location for the output.
+    """
+    cmd = ['vcfExtractor.pl', '-N', '-n', '-a', '-p', pos, vcf]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result, error = p.communicate()
+
+    if p.returncode != 0:
+        sys.stderr.write("ERROR: Can not process file: {}!\n".format(vcf))
+
+    lines = result.split('\n')
+    for l in lines:
+        if l.startswith('chr'):
+            return l.split()[12] # Field 12 is "Location" field in vcfExtractor
+
+def parse_data(report_data, dna, rna, vcf):
     data = defaultdict(dict)
     raw_data = report_data.split('\n')
 
@@ -168,11 +183,16 @@ def parse_data(report_data,dna,rna):
         if fields[0] == 'SNV':
             varid = fields[9] +':'+ fields[1]
             data['snv_data'][varid] = [dna] + populate_list('snv', fields)
+
+            # For protein painter kind of output, need the location
+            data['snv_data'][varid].append(get_location(fields[1], vcf))
+
         elif fields[0] == 'CNV':
             varid = fields[1] +':'+ fields[2]
             cnv_data = populate_list('cnv', fields)
             padded_list = pad_list(cnv_data,'cnv')
             data['cnv_data'][varid] = [dna] + padded_list
+
         elif fields[0] == 'Fusion':
             varid = fields[1] +':'+ fields[2]
             fusion_data = populate_list('fusions', fields)
@@ -201,14 +221,14 @@ def print_data(var_type,data,outfile):
 def arg_star(args):
     return gen_moi_report(*args)
 
-def non_threaded_proc(vcf_files,cnv_args,reads,study,blood):
+def non_threaded_proc(vcf_files, cnv_args, reads, study, blood):
     '''
     If for some reason we only want to use a single thread / proc to do this
     '''
     moi_data = defaultdict(dict)
     for x in vcf_files:
         print 'processing %s...' %  x
-        moi_data[x] = gen_moi_report(x,cnv_args,reads,'single',study,blood)
+        moi_data[x] = gen_moi_report(x, cnv_args, reads, 'single', study, blood)
     return moi_data
 
 def threaded_proc(vcf_files,cnv_params,reads,study,blood):
@@ -271,7 +291,7 @@ def main():
     print_title(outfile,**vars(args))
     header = ['Sample', 'Type', 'Gene', 'Position', 'Ref', 'Alt', 
         'Transcript', 'CDS', 'AA', 'VARID', 'VAF/CN', 'Coverage/Counts',
-        'RefCov', 'AltCov', 'Function']
+        'RefCov', 'AltCov', 'Function', 'Location']
     outfile.write(','.join(header) + "\n")
     
     # Print out sample data by VCF
