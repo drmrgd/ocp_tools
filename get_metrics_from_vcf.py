@@ -17,7 +17,7 @@ import math
 from pprint import pprint as pp
 from distutils.version import LooseVersion
 
-version = '3.7.111417'
+version = '3.8.020618'
 # Flag Thresholds; Make into args at some point.
 mapd_threshold = 0.5
 rna_reads = 500000
@@ -110,7 +110,14 @@ def flag_val(val):
     return '*' + val + '*'
 
 def get_rna_pool_info(vcf):
-    p = subprocess.Popen(['match_rna_qc.pl', vcf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    fusions_json = os.path.join(os.path.dirname(__file__), 'fusion_panel.json')
+    # Make sure we have the fusions json file.
+    if not os.path.exists(fusions_json):
+        sys.stderr.write('ERROR: You must create and input a fusion_panel.json '
+            'file for this script.\n')
+        sys.exit(1)
+    p = subprocess.Popen(['match_rna_qc.pl', vcf], stdout=subprocess.PIPE, 
+        stderr=subprocess.PIPE)
     (data,err) = p.communicate()
     ret_res = data.split('\n')
     results = dict(zip(ret_res[0].split(','),ret_res[1].split(',')))
