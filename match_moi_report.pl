@@ -16,7 +16,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v5.9.012918";
+my $version = "v5.10.031218";
 
 # Remove when in prod.
 #print "\n";
@@ -222,7 +222,7 @@ sub proc_snv_indel {
         # Map these variables to make typing easier and the code cleaner downstream
         my $vaf        = $fields[3];
         my $gene       = $fields[8];
-        my $ocp_vc     = $fields[15];
+        my $ocp_vc     = $fields[14];
         my $hotspot_id = $fields[7];
         my $aa_change  = $fields[11];
         my $function;
@@ -270,7 +270,7 @@ sub proc_snv_indel {
 
 sub gen_var_entry {
     my ($data, $rule) = @_;
-    return [@$data[0..11,13,14,15],$rule];
+    return [@$data[0..11,13,14],$rule];
 }
 
 sub proc_fusion {
@@ -455,9 +455,9 @@ sub gen_report {
     #########################
     print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n",'ansi3');
     ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
-    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript CDS Protein Function oncomineGeneClass 
+    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript CDS Protein Function 
                                oncomineVariantClass Functional_Rule );
-    my $snv_indel_format = "%-16s %-${w1}s %-${w2}s %-7s %-7s %-7s %-7s %-12s %-8s %-16s %-${w4}s %-16s %-28s %-19s %-22s %-21s\n";
+    my $snv_indel_format = "%-16s %-${w1}s %-${w2}s %-7s %-7s %-7s %-7s %-12s %-8s %-16s %-${w4}s %-16s %-28s %-19s %-21s\n";
 
     print_msg(sprintf($snv_indel_format, @snv_indel_header));
     if ( %$snv_indels ) {
