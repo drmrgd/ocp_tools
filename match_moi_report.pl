@@ -16,7 +16,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v5.10.031218";
+my $version = "v5.11.031418";
 
 # Remove when in prod.
 #print "\n";
@@ -140,6 +140,9 @@ my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
 my $fusion_data             = proc_fusion(\$vcf_file) unless $blood;  # Can not run fusion panel on blood specimens since no RNA.
 
+#dd $snv_indel_data;
+#__exit__(__LINE__,'');
+
 unless ($blood) {
     if ($assay_version >= $current_version) {
         my $rna_control_data = rna_qc(\$vcf_file);
@@ -213,6 +216,18 @@ sub proc_snv_indel {
     my @oncomine_vc = qw( Deleterious Hotspot );
 
     open(my $vcf_data, "-|", "vcfExtractor.pl -Nna $$vcf") or die "ERROR: can't parse VCF";
+
+    # Check to see if we're using the dev version VCF extractor and issue 
+    # warning.
+    my $first_line = <$vcf_data>;
+    if ($first_line =~ /[\*]+/) {
+        warn "Using dev version of vcfExtractor!!\n";
+        print $first_line;
+        while ($. < 4) {
+            my $line = <$vcf_data>;
+            print $line;
+        }
+    }
     while (<$vcf_data>) {
         next unless /^chr/;
         my @fields = split;
@@ -222,7 +237,7 @@ sub proc_snv_indel {
         # Map these variables to make typing easier and the code cleaner downstream
         my $vaf        = $fields[3];
         my $gene       = $fields[8];
-        my $ocp_vc     = $fields[14];
+        my $ocp_vc     = $fields[13];
         my $hotspot_id = $fields[7];
         my $aa_change  = $fields[11];
         my $function;
@@ -587,4 +602,14 @@ sub commify {
     my @groups = unpack '(A3)*', reverse $integer;
     my $commified_int = join(',', map {scalar reverse $_} reverse @groups);
     ($decimal) ? return "$commified_int.$decimal" : return $commified_int;
+}
+
+
+sub __exit__ {
+    my ($line, $msg) = @_;
+    print "\n\n";
+    print colored("Got exit message at line $line with message: $msg", 
+        'bold white on_green');
+    print "\n";
+    exit;
 }
