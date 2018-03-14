@@ -140,9 +140,6 @@ my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
 my $fusion_data             = proc_fusion(\$vcf_file) unless $blood;  # Can not run fusion panel on blood specimens since no RNA.
 
-#dd $snv_indel_data;
-#__exit__(__LINE__,'');
-
 unless ($blood) {
     if ($assay_version >= $current_version) {
         my $rna_control_data = rna_qc(\$vcf_file);
@@ -237,7 +234,7 @@ sub proc_snv_indel {
         # Map these variables to make typing easier and the code cleaner downstream
         my $vaf        = $fields[3];
         my $gene       = $fields[8];
-        my $ocp_vc     = $fields[13];
+        my $ocp_vc     = $fields[14];
         my $hotspot_id = $fields[7];
         my $aa_change  = $fields[11];
         my $function;
@@ -274,7 +271,7 @@ sub proc_snv_indel {
                 $results{$id} = gen_var_entry(\@fields, 'ERBB2 in-frame insertion in Exon 20');
             }
             # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
-            elsif ( $gene eq 'KIT' && (grep $exon eq $_, ('9','11','13','14')) && ($function =~ /nonframeshift.*/ || $function eq 'missense') ) {
+            elsif ( $gene eq 'KIT' && (grep $exon eq $_, ('9','11','13','14')) && ($function =~ /nonframeshift.*/ || $function =~ /missense/) ) {
                 next if $study eq 'pediatric';
                 $results{$id} = gen_var_entry(\@fields, 'KIT in-frame indel in Exons 9, 11, 13, or 14');
             }
