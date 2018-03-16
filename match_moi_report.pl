@@ -16,12 +16,13 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v5.11.031418";
+my $version = "v5.13.031618";
 
 # Remove when in prod.
 #print "\n";
 #print colored("*" x 75, 'bold yellow on_black'), "\n";
-#print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT (ver: $version)\n", 'bold yellow on_black');
+#print colored("      DEVELOPMENT VERSION OF MATCH_MOI_REPORT (ver: $version)\n", 
+#    'bold yellow on_black');
 #print colored("*" x 75, 'bold yellow on_black');
 #print "\n\n";
 
@@ -39,22 +40,33 @@ my $blood;
 my $ped_match;
 
 my $description = <<"EOT";
-Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  This program requires 
-the NCI-MATCH CNV Report, Fusion Report, IPC Report, and vcfExtractor scripts to be in your path prior to running.
+Program to parse an IR VCF file to generate a list of NCI-MATCH MOIs and aMOIs.  
+This program requires the NCI-MATCH CNV Report, Fusion Report, IPC Report, and 
+vcfExtractor scripts to be in your path prior to running.
 EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF>
-    -f, --freq   INT   Don't report SNVs / Indels below this allele frequency INT (DEFAULT: $freq_cutoff%)
-    --cu         INT   Set upper bound for amplifications (DEFAULT 5% CI >= $cn_upper_cutoff) 
-    --cl         INT   Set lower bound for deletions (DEFAULT 95% CI <= $cn_lower_cutoff) 
-    -c, --cn     INT   Don't report CNVs below this copy number threshold.  DEFAULT: off. 
-    -r, --reads  INT   Don't report Fusions below this read count. DEFAULT: $read_count reads.
+    -f, --freq   INT   Don't report SNVs / Indels below this allele frequency 
+                       (DEFAULT: $freq_cutoff%)
+    --cu         INT   Set upper bound for amplifications (DEFAULT:
+                       5% CI >= $cn_upper_cutoff) 
+    --cl         INT   Set lower bound for deletions (DEFAULT:
+                       95% CI <= $cn_lower_cutoff) 
+    -c, --cn     INT   Don't report CNVs below this copy number threshold.  
+                       DEFAULT: off. 
+    -r, --reads  INT   Don't report Fusions below this read count. 
+                       DEFAULT: $read_count reads.
     -o, --output STR   Send output to custom file.  Default is STDOUT.
-    -b, --blood        Report is from a Pediatric MATCH Blood specimen and no fusion panel run.
-    -p, --ped_match    Data is from the Pediatric MATCH study. Different non-hotspot rules are run, and so the reporting is a little different.
-    -R, --Raw          Output raw data rather than pretty printed report that can be parsed with other tools
-    -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. Due to noise NOCALL is always on in SNV / Indel space.
+    -b, --blood        Report is from a Pediatric MATCH Blood specimen and no 
+                       fusion panel run.
+    -p, --ped_match    Data is from the Pediatric MATCH study. Different 
+                       non-hotspot rules are run, and so the reporting is a 
+                       little different.
+    -R, --Raw          Output raw data rather than pretty printed report that 
+                       can be parsed with other tools
+    -n, --nocall       Do not report NOCALL variants in Fusion and CNV space. 
+                       Due to noise NOCALL is always on in SNV / Indel space.
     -v, --version      Version information
     -h, --help         Print this help information
 EOT
@@ -86,8 +98,9 @@ sub print_version {
 help if $help;
 print_version if $ver_info;
 
-# Need to disable the CI cutoffs if we want to use a raw CN cutoff like in MATCH prod.
-($cn_upper_cutoff,$cn_lower_cutoff) = '' if $cn_cutoff;
+# Need to disable the CI cutoffs if we want to use a raw CN cutoff like in 
+# MATCH prod.
+($cn_upper_cutoff, $cn_lower_cutoff) = '' if $cn_cutoff;
 
 # Make sure enough args passed to script
 if ( scalar( @ARGV ) < 1 ) {
@@ -100,17 +113,19 @@ if ( scalar( @ARGV ) < 1 ) {
 my $out_fh;
 if ( $outfile ) {
     print "Writing results to $outfile...\n";
-    open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
+    open( $out_fh, ">", $outfile ) 
+        || die "Can't open the output file '$outfile' for writing: $!";
 } else {
     $out_fh = \*STDOUT;
 }
 
-# Now that we have more than one study with this assay, need to configure some specific params.
+# Now that we have more than one study with this assay, need to configure some 
+# specific params.
 my $study;
 ($ped_match or $blood) ? ($study = 'pediatric') : ($study = 'adult');
 
 if (DEBUG) {
-    print "======================================  DEBUG  ======================================\n";
+    print "============================  DEBUG  ============================\n";
     print "Params as passed into script:\n";
     print "\tCNV Threshold    => $cn_cutoff\n";
     print "\tVAF Threshold    => $freq_cutoff\n";
@@ -119,16 +134,17 @@ if (DEBUG) {
     print "\tStudy            => $study\n";
     print "\tPediatric Blood  => $blood\n";
     ($outfile) ? print " $outfile\n" : print "\n";
-    print "=====================================================================================\n\n";
+    print "=================================================================\n\n";
 }
 
 # Check ENV for required programs
-my @required_programs = qw( vcfExtractor.pl ocp_cnv_report.pl ocp_control_summary.pl ocp_fusion_report.pl match_rna_qc.pl );
+my @required_programs = qw( vcfExtractor.pl ocp_cnv_report.pl 
+    ocp_control_summary.pl ocp_fusion_report.pl match_rna_qc.pl );
 for my $prog (@required_programs) {
     die "ERROR: '$prog' is required, but not found in your path!\n" unless qx(which $prog);
 }
 
-########------------------------------ END ARG Parsing ---------------------------------#########
+########--------------------- END ARG Parsing ------------------------#########
 my $vcf_file = shift;
 die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e $vcf_file;
 
@@ -138,7 +154,7 @@ print "[INFO]: OVAT version: $assay_version\n" if DEBUG;
 
 my $snv_indel_data          = proc_snv_indel(\$vcf_file);
 my $cnv_data                = proc_cnv(\$vcf_file);
-my $fusion_data             = proc_fusion(\$vcf_file) unless $blood;  # Can not run fusion panel on blood specimens since no RNA.
+my $fusion_data             = proc_fusion(\$vcf_file) unless $blood;  
 
 unless ($blood) {
     if ($assay_version >= $current_version) {
@@ -150,16 +166,19 @@ unless ($blood) {
 }
 
 # Print out the combined report
-($raw_output) ? raw_output($snv_indel_data,$fusion_data,$cnv_data) : gen_report($vcf_file,$snv_indel_data,$fusion_data,$cnv_data);
+($raw_output) 
+    ? raw_output($snv_indel_data,$fusion_data,$cnv_data) 
+    : gen_report($vcf_file,$snv_indel_data,$fusion_data,$cnv_data);
 
 sub vcf_version_check {
-    # Check the VCF version, as well as, determining if we loaded a DNA only file and asked for both DNA and RNA data.
+    # Check the VCF version, as well as, determining if we loaded a DNA only 
+    # file and asked for both DNA and RNA data.
     my $vcf = shift;
     open(my $vcf_fh, "<", $$vcf);
     my @header = grep{ /^#/ } <$vcf_fh>;
     die "ERROR: The input file '$$vcf' does not appear to be a valid VCF file!\n" unless @header;
-    #die "ERROR: You have tried to load a VCF file witout fusion data and without selecting the DNA only option!\n" unless grep {/##FusionSampleQC/} @header or $blood;
-    die "ERROR: You have tried to load a VCF file witout fusion data and without selecting the DNA only option!\n" unless grep {/Fusion/} @header or $blood;
+    die "ERROR: You have tried to load a VCF file witout fusion data and without ",
+        "selecting the DNA only option!\n" unless grep {/Fusion/} @header or $blood;
     my ($ovat_ver) = map { /^##OncomineVariantAnnotationToolVersion=(\d+\.\d+)\.\d+/ } @header;
     return $ovat_ver;
 }
@@ -169,7 +188,8 @@ sub proc_snv_indel {
     my $vcf = shift;
     my %results;
 
-    # Blacklisted variants based on Oncomine's list of recurrent SNPs and high error rate mutations.
+    # Blacklisted variants based on Oncomine's list of recurrent SNPs and high 
+    # error rate mutations.
     my @blacklisted_variants = qw(
         chr2:16082320:C:CCG
         chr2:209108317:C:T
@@ -212,7 +232,8 @@ sub proc_snv_indel {
     );
     my @oncomine_vc = qw( Deleterious Hotspot );
 
-    open(my $vcf_data, "-|", "vcfExtractor.pl -Nna $$vcf") or die "ERROR: can't parse VCF";
+    open(my $vcf_data, "-|", "vcfExtractor.pl -Nna $$vcf") 
+        or die "ERROR: can't parse VCF";
 
     # Check to see if we're using the dev version VCF extractor and issue 
     # warning.
@@ -231,17 +252,20 @@ sub proc_snv_indel {
         my $id = join(':', @fields[0..2]);
         next if grep {$id eq $_} @blacklisted_variants;
 
-        # Map these variables to make typing easier and the code cleaner downstream
+        # Map these variables to make typing easier and the code cleaner 
+        # downstream
         my $vaf        = $fields[3];
         my $gene       = $fields[8];
         my $ocp_vc     = $fields[14];
         my $hotspot_id = $fields[7];
         my $aa_change  = $fields[11];
         my $function;
-        ($fields[13] eq '---') ? ($function = $fields[12] and $fields[13] = $fields[12]) : ($function = $fields[13]);
+        ($fields[13] eq '---') 
+            ? ($function = $fields[12] and $fields[13] = $fields[12]) 
+            : ($function = $fields[13]);
 
-        # Skip anything that does not map to an exon for now..might want to get utr vars later, though
-        #next unless $fields[12] =~ /^Exon/; 
+        # Skip anything that does not map to an exon for now..might want to get 
+        # utr vars later, though
         (my $exon = $fields[12]) =~ s/Exon// if $fields[12] =~ /^Exon/;
         $exon //= '-';
         
@@ -255,25 +279,37 @@ sub proc_snv_indel {
             elsif ( $ocp_vc eq 'Deleterious' ) {
                 $results{$id} = gen_var_entry(\@fields, 'Deleterious in TSG');
             }
-            # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 20 rule for Arms A & C
+            # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 
+            # 20 rule for Arms A & C
             elsif ( $gene eq 'EGFR' ) { 
                 next if $study eq 'pediatric';
                 if ( $exon eq '19' && $function eq 'nonframeshiftDeletion' ) {
-                    $results{$id} = gen_var_entry(\@fields, 'EGFR in-frame deletion in Exon 19');
+                    $results{$id} = gen_var_entry(\@fields, 
+                        'EGFR in-frame deletion in Exon 19');
                 }
                 elsif ($exon eq '20' && $function eq 'nonframeshiftInsertion') {
-                    $results{$id} = gen_var_entry(\@fields, 'EGFR in-frame insertion in Exon 20');
+                    $results{$id} = gen_var_entry(\@fields, 
+                        'EGFR in-frame insertion in Exon 20');
                 }
             }
             # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
-            elsif ( $gene eq 'ERBB2' && $exon eq '20' && $function eq 'nonframeshiftInsertion' ) {
+            elsif ( $gene eq 'ERBB2' 
+                    && $exon eq '20' 
+                    && $function eq 'nonframeshiftInsertion' 
+                ) {
                 next if $study eq 'pediatric';
-                $results{$id} = gen_var_entry(\@fields, 'ERBB2 in-frame insertion in Exon 20');
+                $results{$id} = gen_var_entry(\@fields, 
+                    'ERBB2 in-frame insertion in Exon 20');
             }
-            # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion rule for Arm V
-            elsif ( $gene eq 'KIT' && (grep $exon eq $_, ('9','11','13','14')) && ($function =~ /nonframeshift.*/ || $function =~ /missense/) ) {
+            # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion 
+            # rule for Arm V
+            elsif ( $gene eq 'KIT' 
+                    && (grep $exon eq $_, ('9','11','13','14')) 
+                    && ($function =~ /nonframeshift.*/ || $function =~ /missense/) 
+                ) {
                 next if $study eq 'pediatric';
-                $results{$id} = gen_var_entry(\@fields, 'KIT in-frame indel in Exons 9, 11, 13, or 14');
+                $results{$id} = gen_var_entry(\@fields, 
+                    'KIT in-frame indel in Exons 9, 11, 13, or 14');
             }
         }
     }
@@ -291,14 +327,18 @@ sub proc_fusion {
     my %results;
 
     my $cmd;
-    ($nocall) ? ($cmd = qq(ocp_fusion_report.pl -Nn $$vcf_file)) : ($cmd = qq(ocp_fusion_report.pl -n $$vcf_file));
-    open(my $vcf_data, '-|', $cmd) or die "ERROR: Can't parse VCF file for fusions!";
+    ($nocall) 
+        ? ($cmd = qq(ocp_fusion_report.pl -Nn $$vcf_file)) 
+        : ($cmd = qq(ocp_fusion_report.pl -n $$vcf_file));
+    open(my $vcf_data, '-|', $cmd) 
+        or die "ERROR: Can't parse VCF file for fusions!";
     while (<$vcf_data>) {
         # Skip header and blank lines
         next if $. < 4 || $_ =~ /^\s*$/;
         my @fields = split;
 
-        # Unifying the fusion threshold for both inter and intra-genic fusions now.
+        # Unifying the fusion threshold for both inter and intra-genic 
+        # fusions now.
         next if $fields[2] < $read_count;
 
         $fields[0] =~ s/\./|/;
@@ -310,7 +350,7 @@ sub proc_fusion {
     }
     # Get the total mapped RNA reads
     open(my $fh, "<", $$vcf_file);
-    my ($mapped_reads) = map { /^##TotalMappedFusionPanelReads=(\d+)/ }<$fh>;
+    my ($mapped_reads) = map { /^##TotalMappedFusionPanelReads=(\d+)/ } <$fh>;
     close $fh;
     $results{'MAPPED_RNA'} = $mapped_reads;
     return \%results;
@@ -331,8 +371,10 @@ sub proc_ipc {
     my ($vcf_file,$assay_version) = @_;
     my %panel = ( '2.0' => '1', '2.2' => '2', '2.3' => '3' );
     my $cmd = "ocp_control_summary.pl -m $panel{$$assay_version} $$vcf_file";
-    open( my $vcf_data, '-|', $cmd ) || die "ERROR: Can't parse the expression control data";
-    my ($expr_sum) = map {/\s+(\d+)\s*$/} <$vcf_data>; # trailing whitespace in ocp_control_summary output.
+    open( my $vcf_data, '-|', $cmd ) 
+        or die "ERROR: Can't parse the expression control data";
+    # Trailing whitespace in ocp_control_summary output.
+    my ($expr_sum) = map {/\s+(\d+)\s*$/} <$vcf_data>; 
     $expr_sum //= 0;
     return $expr_sum;
 }
@@ -343,7 +385,10 @@ sub proc_cnv {
     my ($gender, $cellularity, $mapd);
 
     my $cmd; 
-    ($nocall) ? ($cmd = qq(ocp_cnv_report.pl -N $$vcf_file)) : ($cmd = qq(ocp_cnv_report.pl $$vcf_file));
+    ($nocall) 
+        ? ($cmd = qq(ocp_cnv_report.pl -N $$vcf_file)) 
+        : ($cmd = qq(ocp_cnv_report.pl $$vcf_file));
+
     open(my $vcf_data, '-|', $cmd);
     while (<$vcf_data>) {
         if (/^:::/) {
@@ -374,29 +419,31 @@ sub proc_cnv {
 
 sub field_width {
     # Get the longest field width for formatting later.
-    my $data_ref = shift;
-    my $type = shift;
+    my ($data_ref, $type) = @_;
 
     my $ref_width = 0;
-    my $var_width = 0;
-    my $hgvs_width = 0;
-    my $filter_width= 0;
+    my $alt_width = 0;
+    my $cds_width = 0;
+    my $aa_width  = 0;
+    my $func_width = 0;
+
     my $fusion_id_width = 0;
 
     if ( $type eq 'snv' ) {
-        for my $variant ( keys %$data_ref ) {
-            my $ref_len = length( $$data_ref{$variant}[1] );
-            my $alt_len = length( $$data_ref{$variant}[2] );
-            my $filter_len = length( $$data_ref{$variant}[4] );
-            my $hgvs_len = length( $$data_ref{$variant}[10] );
-            $ref_width = $ref_len if ( $ref_len > $ref_width );
-            $var_width = $alt_len if ( $alt_len > $var_width );
-            $filter_width = $filter_len if ( $filter_len > $filter_width );
-            $hgvs_width = $hgvs_len if ( $hgvs_len > $hgvs_width );
-        }
+        while (my ($variant, $data) = each %$data_ref ) {
+            my $ref_len = length( $data->[1] ) + 2;
+            my $alt_len = length( $data->[2] ) + 2;
+            my $cds_len = length( $data->[10] ) + 2;
+            my $aa_len  = length( $data->[11] ) + 2;
+            my $func_len = length( $data->[12] ) + 2;
 
-        ( $filter_width > 13 ) ? ($filter_width += 2) : ($filter_width = 17);
-        return ( $ref_width + 2, $var_width + 2, $filter_width, $hgvs_width + 2);
+            $ref_width = $ref_len if ( $ref_len > $ref_width );
+            $alt_width = $alt_len if ( $alt_len > $alt_width );
+            $cds_width = $cds_len if ( $cds_len > $cds_width );
+            $aa_width = $aa_len if ( $aa_len > $aa_width );
+            $func_width = $func_len if ( $func_len > $func_width );
+        }
+        return ( $ref_width, $alt_width, $cds_width, $aa_width, $func_width );
     } 
     elsif ( $type eq 'fusion' ) {
         for my $variant ( keys %$data_ref ) {
@@ -410,7 +457,8 @@ sub field_width {
 }
 
 sub print_msg {
-    # Kludgy way to simulate tee, but with and without colored output (ANSI escape codes in .txt files not helpful!
+    # Kludgy way to simulate tee, but with and without colored output (ANSI 
+    # escape codes in .txt files not helpful!
     my ($msg, $format) = @_;
     print {$out_fh} $msg if $outfile;
     ($format) ? print colored($msg, $format) : print $msg;
@@ -418,7 +466,8 @@ sub print_msg {
 }
 
 sub raw_output {
-    # Generate a raw data dump so that we can import this data easily into another tool for further parsing.
+    # Generate a raw data dump so that we can import this data easily into 
+    # another tool for further parsing.
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
     my $mapd = $$cnv_data{'META'}[2];
     select $out_fh;
@@ -448,28 +497,67 @@ sub raw_output {
 sub gen_report {
     # Print out the final MOI Report
     my ($vcf_filename, $snv_indels, $fusion_data, $cnv_data) = @_;
-    my ($w1, $w2, $w3, $w4, $format_string);
+    my $format_string;
 
     #########################
     ##    Report Header    ##
     #########################
     my ($dna_name, $rna_name) = $vcf_filename =~ /^(?:.*\/)?(.*?)_v\d+_(.*?)_RNA_v\d+\.vcf/;
     my $study_title;
-    ($study eq 'pediatric') ? ($study_title = 'Pediatric NCI-MATCH') : ($study_title = 'Adult NCI-MATCH');
+    ($study eq 'pediatric') 
+        ? ($study_title = 'Pediatric NCI-MATCH') 
+        : ($study_title = 'Adult NCI-MATCH');
+
     print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
-    #print_msg('NCI-MATCH MOI Report for ', 'bold ansi15');
     print_msg("$study_title MOI Report for ", 'bold ansi15');
-    (! $dna_name || ! $rna_name) ? print_msg("$vcf_filename\n", 'bold ansi15') : print_msg("$dna_name DNA / $rna_name RNA\n", 'bold ansi15');
+
+    (! $dna_name || ! $rna_name) 
+        ? print_msg("$vcf_filename\n", 'bold ansi15') 
+        : print_msg("$dna_name DNA / $rna_name RNA\n", 'bold ansi15');
+
     print_msg(sprintf("%s\n",'-'x150), 'bold ansi15');
 
     #########################
     ## SNV / Indel Output  ##
     #########################
-    print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n",'ansi3');
-    ($w1, $w2, $w3, $w4) = field_width( $snv_indels, 'snv' );
-    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID Gene Transcript CDS Protein Function 
-                               oncomineVariantClass Functional_Rule );
-    my $snv_indel_format = "%-16s %-${w1}s %-${w2}s %-7s %-7s %-7s %-7s %-12s %-8s %-16s %-${w4}s %-16s %-28s %-19s %-21s\n";
+    print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n",
+        'ansi3');
+
+    my ($refwidth, $altwidth, $cdswidth, $aawidth, 
+        $funcwidth) = field_width( $snv_indels, 'snv' ) if $snv_indels;
+
+    # Need some defaults if no data.
+    $refwidth  //= 5; 
+    $altwidth  //= 5;
+    $cdswidth  //= 5; 
+    $aawidth   //= 9; 
+    $funcwidth //= 10;
+
+    my %formatter = (
+        'Chrom:Pos'            => "%-16s",
+        'Ref'                  => "%-${refwidth}s",
+        'Alt'                  => "%-${altwidth}s",
+        'VAF'                  => '%-7s',
+        'TotCov'               => '%-7s',
+        'RefCov'               => '%-7s',
+        'AltCov'               => '%-7s',
+        'VARID'                => '%-12s',
+        'Gene'                 => '%-8s',
+        'Transcript'           => '%-16s',
+        'CDS'                  => "%-${cdswidth}s",
+        'Protein'              => "%-${aawidth}s",
+        'Function'             => "%-${funcwidth}s",
+        'oncomineVariantClass' => '%-21s',
+        'FunctionalRule'       => '%s',
+    );
+    #dd \%formatter;
+    #exit;
+
+    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID
+        Gene Transcript CDS Protein Function oncomineVariantClass 
+        FunctionalRule );
+
+    my $snv_indel_format = join(' ', @formatter{@snv_indel_header}) . "\n";
 
     print_msg(sprintf($snv_indel_format, @snv_indel_header));
     if ( %$snv_indels ) {
@@ -477,7 +565,8 @@ sub gen_report {
             print_msg(sprintf($snv_indel_format, @{$$snv_indels{$variant}}));
         }
     } else {
-        print_msg(">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n", "red on_black");
+        print_msg(">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n", 
+            "red on_black");
     }
     print_msg("\n");
 
@@ -495,8 +584,10 @@ sub gen_report {
     if ($cn_upper_cutoff) {
         print_msg( ", 5% CI >= $cn_upper_cutoff, 95% CI <= $cn_lower_cutoff) :::\n", "ansi3");
     } else {
-        my $cnv_param_string; # Want to change output to indicate if we're using 5% CI or CN for the threshold.
-        ($cn_cutoff == 4) ? ($cnv_param_string = ", 5% CI >=" ) : ($cnv_param_string = ", CN >=");
+        my $cnv_param_string; 
+        ($cn_cutoff == 4) 
+            ? ($cnv_param_string = ", 5% CI >=" ) 
+            : ($cnv_param_string = ", CN >=");
         print_msg( "$cnv_param_string $cn_cutoff) :::\n", "ansi3");
     }
 
@@ -505,19 +596,24 @@ sub gen_report {
 
     if ( %$cnv_data ) {
         for my $cnv ( sort{ versioncmp( $$cnv_data{$a}->[0], $$cnv_data{$b}->[0] ) } keys %$cnv_data ) {
-            print_msg(sprintf('%-9s %-10s %-6s %-10.2f ', $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1,2]));
+            print_msg(sprintf('%-9s %-10s %-6s %-10.2f ', 
+                    $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1,2]));
             my @formatted_copy_number = sprintf('%-10.2f ', $$cnv_data{$cnv}[3]);
-            ($$cnv_data{$cnv}[3] < 1) ? 
-                push(@formatted_copy_number,'bold red on_black') : push(@formatted_copy_number,'bold green on_black');
+
+            ($$cnv_data{$cnv}[3] < 1) 
+                ? push(@formatted_copy_number,'bold red on_black') 
+                : push(@formatted_copy_number,'bold green on_black');
             print_msg(@formatted_copy_number);
             print_msg(sprintf("%-10.2f\n", $$cnv_data{$cnv}[4]));
         }
     } else {
-        print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n", "red on_black");
+        print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n",
+            "red on_black");
     }
     print_msg("\n");
 
-    # Do not output fusion data results if we have run on blood since no fusion panel run.
+    # Do not output fusion data results if we have run on blood since no 
+    # fusion panel run.
     return if $blood;
 
     #########################
@@ -542,12 +638,15 @@ sub gen_report {
     }
 
     print_msg("::: MATCH Reportable Fusions (Total Mapped Reads: ",'ansi3');
-    # No good version information here.  Use the presence / absence of pool specific information to deduce what version 
-    # and therefore which threshold to use.
+    # No good version information here.  Use the presence / absence of pool 
+    # specific information to deduce what version and therefore which threshold 
+    # to use.
     my $rna_reads_threshold;
-    # if we have a pool1_sum value, then it's the v3 assay and we need a higher threshold.  If not,
-    # use the v2 data.
-    ($pool1_sum) ? ($rna_reads_threshold = 500000) : ($rna_reads_threshold = 100000);
+    # if we have a pool1_sum value, then it's the v3 assay and we need a higher 
+    # threshold.  If not, use the v2 data.
+    ($pool1_sum) 
+        ? ($rna_reads_threshold = 500000) 
+        : ($rna_reads_threshold = 100000);
     $format_string = format_string($tot_rna_reads, '<', $rna_reads_threshold);
     print_msg(@$format_string);
 
@@ -569,15 +668,16 @@ sub gen_report {
     $read_count = commify($read_count);
     print_msg( "; Threshold: $read_count) :::\n",'ansi3');
 
-    ($w1) = field_width( $fusion_data, 'fusion' );
+    my ($w1) = field_width( $fusion_data, 'fusion' );
     my $fusion_format = "%-${w1}s %-12s %-12s %-15s %-15s\n";
     my @fusion_header = qw( Fusion ID Read_Count Driver_Gene Partner_Gene );
     print_msg(sprintf($fusion_format, @fusion_header));
     if ( %$fusion_data ) {
         for ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
             my ($fusion, $junct, $id) = split( /\|/ );
-            print_msg(sprintf($fusion_format, "$fusion.$junct", $id, $$fusion_data{$_}->{'COUNT'}, 
-                    $$fusion_data{$_}->{'DRIVER'}, $$fusion_data{$_}->{'PARTNER'}));
+            print_msg(sprintf($fusion_format, "$fusion.$junct", $id, 
+                    $$fusion_data{$_}->{'COUNT'}, $$fusion_data{$_}->{'DRIVER'}, 
+                    $$fusion_data{$_}->{'PARTNER'}));
         }
     } else {
         print_msg(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
