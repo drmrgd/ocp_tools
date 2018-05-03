@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Run MATCH MOI Reporter on a VCF file and generate a CSV with result that can 
 # be imported into Excel for a collated report
@@ -20,7 +20,7 @@ from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '3.0.012918'
+version = '3.1.050318'
 debug = False 
 
 def get_args():
@@ -94,7 +94,7 @@ def parse_cnv_params(cu,cl,cn):
     }
 
     # Would like to write a generator expression here, but can't figure it out!
-    for k,v in params.iteritems():
+    for k,v in params.items():
         if v:
             params_list.extend([k,str(v)])
     return params_list
@@ -119,12 +119,14 @@ def gen_moi_report(vcf, cnv_args, reads, proc_type, study, blood):
 
     moi_report_cmd = ['match_moi_report.pl'] + thresholds + [vcf]
     p=subprocess.Popen(moi_report_cmd, stdout=subprocess.PIPE, 
-        stderr=subprocess.PIPE)
-    result,error = p.communicate()
+        stderr=subprocess.PIPE, encoding='utf8')
+    result, error = p.communicate()
 
     if p.returncode != 0:
         sys.stderr.write("ERROR: Can not process file: {}!\n".format(vcf))
         raise(error)
+    elif 'foo' == True:
+        pass
     else:
         # need a tuple to track threads and not crash dict entries if we're 
         # doing multithreaded processing.
@@ -163,7 +165,8 @@ def get_location(pos, vcf):
     the VCF in vcfExtractor, and get the location for the output.
     """
     cmd = ['vcfExtractor.pl', '-N', '-n', '-a', '-p', pos, vcf]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+        encoding='utf8')
     result, error = p.communicate()
 
     if p.returncode != 0:
@@ -227,8 +230,9 @@ def non_threaded_proc(vcf_files, cnv_args, reads, study, blood):
     '''
     moi_data = defaultdict(dict)
     for x in vcf_files:
-        print 'processing %s...' %  x
-        moi_data[x] = gen_moi_report(x, cnv_args, reads, 'single', study, blood)
+        print('processing %s...' %  x)
+        moi_data[x] = gen_moi_report(x, cnv_args, reads, 'single', study, 
+                blood)
     return moi_data
 
 def threaded_proc(vcf_files,cnv_params,reads,study,blood):
@@ -272,7 +276,7 @@ def main():
     # Setup an output file if we want one
     outfile = ''
     if args.output:
-        print "Writing output to '%s'" % args.output
+        print("Writing output to '%s'" % args.output)
         outfile = open(args.output, 'w')
     else:
         outfile = sys.stdout
