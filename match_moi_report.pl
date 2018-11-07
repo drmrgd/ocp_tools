@@ -359,7 +359,7 @@ sub proc_fusion {
 sub rna_qc {
     my $vcf = shift;
     my %results;
-    open(my $rna_qc_data, "-|", "match_rna_qc.pl $$vcf");
+    open(my $rna_qc_data, "-|", "match_rna_qc.pl -a $$vcf");
     chomp(my $header = <$rna_qc_data>);
     chomp(my $data   = <$rna_qc_data>);
     @results{split(/,/,$header)} = split(/,/,$data);
