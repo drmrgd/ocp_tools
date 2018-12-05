@@ -2,7 +2,7 @@
 # Parse a VCF file and generate a table of MOIs and aMOIs
 #
 # 2/12/2014 - D Sims
-###################################################################################################
+####################################################################################
 use warnings;
 use strict;
 use autodie;
@@ -16,7 +16,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v5.13.031618";
+my $version = "v5.14.120518";
 
 # Remove when in prod.
 #print "\n";
@@ -30,9 +30,15 @@ my $help;
 my $ver_info;
 my $outfile;
 my $freq_cutoff = 5;
-my $cn_cutoff; # if set to 4, will use 5% CI.  Else will use CN as the threshold.  No need to specify.
-my $cn_upper_cutoff = 4; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
-my $cn_lower_cutoff = 1; # Configure to capture upper and lower bound CNs in an attempt to get both amps and dels
+# if set to 4, will use 5% CI.  Else will use CN as the threshold.  No need to 
+# specify.
+my $cn_cutoff; 
+# Configure to capture upper and lower bound CNs in an attempt to get both amps 
+# and dels
+my $cn_upper_cutoff = 4; 
+# Configure to capture upper and lower bound CNs in an attempt to get both amps 
+# and dels
+my $cn_lower_cutoff = 1; 
 my $read_count = 100;
 my $raw_output;
 my $nocall;
@@ -124,16 +130,25 @@ if ( $outfile ) {
 my $study;
 ($ped_match or $blood) ? ($study = 'pediatric') : ($study = 'adult');
 
+# Create a blacklist lookup file for SNV and Indel parsing.
+my $blacklist_file = dirname($0) . '/resource/blacklist.txt';
+open(my $fh, "<", $blacklist_file);
+my $header = <$fh>;
+my $blist_ver = (split(/ /,$header))[1];
+my @blacklisted_variants = map{ chomp; $_ } <$fh>;
+close $fh;
+
 if (DEBUG) {
     print "============================  DEBUG  ============================\n";
     print "Params as passed into script:\n";
-    print "\tCNV Threshold    => $cn_cutoff\n";
-    print "\tVAF Threshold    => $freq_cutoff\n";
-    print "\tFusion Threshold => $read_count\n";
-    print "\tOutput File      => ";
-    print "\tStudy            => $study\n";
-    print "\tPediatric Blood  => $blood\n";
+    print "\tCNV Threshold      => $cn_cutoff\n";
+    print "\tVAF Threshold      => $freq_cutoff\n";
+    print "\tFusion Threshold   => $read_count\n";
+    print "\tOutput File        => ";
+    print "\tStudy              => $study\n";
+    print "\tPediatric Blood    => $blood\n";
     ($outfile) ? print " $outfile\n" : print "\n";
+    print "\tBlacklist version  => $blist_ver\n";
     print "=================================================================\n\n";
 }
 
@@ -142,7 +157,7 @@ my @required_programs = qw( vcfExtractor.pl ocp_cnv_report.pl
     ocp_control_summary.pl ocp_fusion_report.pl match_rna_qc.pl );
 for my $prog (@required_programs) {
     die "ERROR: '$prog' is required, but not found in your path!\n" unless qx(which $prog);
-}
+} 
 
 ########--------------------- END ARG Parsing ------------------------#########
 my $vcf_file = shift;
@@ -152,7 +167,7 @@ my $current_version = version->parse('2.3');
 my $assay_version = version->parse( vcf_version_check(\$vcf_file) );
 print "[INFO]: OVAT version: $assay_version\n" if DEBUG;
 
-my $snv_indel_data          = proc_snv_indel(\$vcf_file);
+my $snv_indel_data          = proc_snv_indel(\$vcf_file, \@blacklisted_variants);
 my $cnv_data                = proc_cnv(\$vcf_file);
 my $fusion_data             = proc_fusion(\$vcf_file) unless $blood;  
 
@@ -185,52 +200,8 @@ sub vcf_version_check {
 
 sub proc_snv_indel {
     # use new VCF extractor to handle SNV and Indel calling
-    my $vcf = shift;
+    my ($vcf, $blacklisted_variants) = @_;
     my %results;
-
-    # Blacklisted variants based on Oncomine's list of recurrent SNPs and high 
-    # error rate mutations.
-    my @blacklisted_variants = qw(
-        chr2:16082320:C:CCG
-        chr2:209108317:C:T
-        chr3:10183734:C:T
-        chr4:1806131:T:C
-        chr4:55593464:A:C
-        chr4:55964925:G:A
-        chr4:106196819:G:T
-        chr5:112170746:AT:A
-        chr5:112175651:A:G
-        chr5:112175951:G:GA
-        chr5:149449827:C:T
-        chr7:116339642:G:T
-        chr7:116340262:A:G
-        chr7:116411990:C:T
-        chr7:116411923:C:T
-        chr9:98209628:T:TG
-        chr9:139391437:TG:T
-        chr9:139391975:GC:G
-        chr9:139399132:C:T
-        chr10:89685288:T:TA
-        chr10:123247514:C:CT
-        chr10:123247514:CT:C
-        chr11:320606:G:T
-        chr11:108123551:C:T
-        chr11:108138003:T:C
-        chr11:108175462:G:A
-        chr11:108175463:A:T
-        chr13:28623587:C:T
-        chr13:32972626:A:T
-        chr16:68855966:G:A
-        chr17:7578212:GA:G
-        chr17:7578373:T:C
-        chr17:7579471:G:GC
-        chr17:7579472:G:C
-        chr17:29508455:TTA:T
-        chr17:29553538:G:A
-        chr19:1223125:C:G
-        chr20:36030940:G:C
-    );
-    my @oncomine_vc = qw( Deleterious Hotspot );
 
     open(my $vcf_data, "-|", "vcfExtractor.pl -Nna $$vcf") 
         or die "ERROR: can't parse VCF";
@@ -250,7 +221,7 @@ sub proc_snv_indel {
         next unless /^chr/;
         my @fields = split;
         my $id = join(':', @fields[0..2]);
-        next if grep {$id eq $_} @blacklisted_variants;
+        next if grep {$id eq $_} @$blacklisted_variants;
 
         # Map these variables to make typing easier and the code cleaner 
         # downstream
