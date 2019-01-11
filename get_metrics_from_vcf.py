@@ -17,7 +17,7 @@ import subprocess
 from pprint import pprint as pp
 from distutils.version import LooseVersion
 
-version = '3.9.110718'
+version = '3.10.011119'
 
 # Flag Thresholds; Make into args at some point.
 mapd_threshold = 0.5
@@ -149,8 +149,8 @@ def print_data(results,outfile,dna_only):
     # to make easier.
     l = [len(v) for k,v in results.iteritems()]
     if len(set(l)) > 1:
-        sys.stderr.write('Mixed version VCFs detected!  We can not process two ',
-            'different versions together! Please run separately and cat the data ',
+        sys.stderr.write('Mixed version VCFs detected!  We can not process two '
+            'different versions together! Please run separately and cat the data '
             'later.\n')
         sys.exit(1)
 
@@ -160,7 +160,7 @@ def print_data(results,outfile,dna_only):
             try:
                 tmp_reads = results[sample]['RNA_Reads']
             except KeyError:
-                sys.stderr.write('ERROR: DNA only specimen(s) detected. You must ',
+                sys.stderr.write('ERROR: DNA only specimen(s) detected. You must '
                     'run these using the "--dna_only" option!\n')
                 sys.exit(1)
 
