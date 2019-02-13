@@ -16,7 +16,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 my $scriptname = basename($0);
-my $version = "v5.14.120518";
+my $version = "v5.15.021319";
 
 # Remove when in prod.
 #print "\n";
@@ -244,23 +244,21 @@ sub proc_snv_indel {
         if ( $vaf >= $freq_cutoff ) {
             # Anything that's a hotspot
             if ( $hotspot_id ne '.' or $ocp_vc eq 'Hotspot' ) {
-                $results{$id} = gen_var_entry(\@fields, 'Hotspot Variant');
+                push(@fields, 'Hotspot Variant');
             }
             # De Novo TSG frameshift calls
             elsif ( $ocp_vc eq 'Deleterious' ) {
-                $results{$id} = gen_var_entry(\@fields, 'Deleterious in TSG');
+                push(@fields, 'Deleterious in TSG');
             }
             # EGFR nonframeshiftDeletion and nonframeshiftInsertion in Exon 19, 
             # 20 rule for Arms A & C
             elsif ( $gene eq 'EGFR' ) { 
                 next if $study eq 'pediatric';
                 if ( $exon eq '19' && $function eq 'nonframeshiftDeletion' ) {
-                    $results{$id} = gen_var_entry(\@fields, 
-                        'EGFR in-frame deletion in Exon 19');
+                    push(@fields, 'EGFR in-frame deletion in Exon 19');
                 }
                 elsif ($exon eq '20' && $function eq 'nonframeshiftInsertion') {
-                    $results{$id} = gen_var_entry(\@fields, 
-                        'EGFR in-frame insertion in Exon 20');
+                    push(@fields, 'EGFR in-frame insertion in Exon 20');
                 }
             }
             # ERBB2 nonframeshiftInsertion in Exon20 rule for Arm B
@@ -269,8 +267,7 @@ sub proc_snv_indel {
                     && $function eq 'nonframeshiftInsertion' 
                 ) {
                 next if $study eq 'pediatric';
-                $results{$id} = gen_var_entry(\@fields, 
-                    'ERBB2 in-frame insertion in Exon 20');
+                push(@fields, 'ERBB2 in-frame insertion in Exon 20');
             }
             # KIT Exon 9 / 11 nonframeshiftInsertion and nonframeshiftDeletion 
             # rule for Arm V
@@ -279,17 +276,19 @@ sub proc_snv_indel {
                     && ($function =~ /nonframeshift.*/ || $function =~ /missense/) 
                 ) {
                 next if $study eq 'pediatric';
-                $results{$id} = gen_var_entry(\@fields, 
-                    'KIT in-frame indel in Exons 9, 11, 13, or 14');
+                push(@fields, 'KIT in-frame indel in Exons 9, 11, 13, or 14');
             }
         }
+        # If we got an MOI annot (have more than 14 fields now), collect data.
+        $results{$id} = \@fields if @fields > 15;
     }
     return \%results;
 }
 
 sub gen_var_entry {
     my ($data, $rule) = @_;
-    return [@$data[0..11,13,14],$rule];
+    # return [@$data[0..11,13,14],$rule];
+    return [@$data[0..14],$rule];
 }
 
 sub proc_fusion {
@@ -503,6 +502,7 @@ sub gen_report {
     $cdswidth  //= 5; 
     $aawidth   //= 9; 
     $funcwidth //= 10;
+    $funcwidth = 10 if $funcwidth < 10;
 
     my %formatter = (
         'Chrom:Pos'            => "%-16s",
@@ -517,6 +517,7 @@ sub gen_report {
         'Transcript'           => '%-16s',
         'CDS'                  => "%-${cdswidth}s",
         'Protein'              => "%-${aawidth}s",
+        'Exon'                 => "%-6s",
         'Function'             => "%-${funcwidth}s",
         'oncomineVariantClass' => '%-21s',
         'FunctionalRule'       => '%s',
@@ -525,7 +526,7 @@ sub gen_report {
     #exit;
 
     my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID
-        Gene Transcript CDS Protein Function oncomineVariantClass 
+        Gene Transcript CDS Protein Exon Function oncomineVariantClass 
         FunctionalRule );
 
     my $snv_indel_format = join(' ', @formatter{@snv_indel_header}) . "\n";
