@@ -12,7 +12,6 @@ import re
 import subprocess
 import datetime
 import argparse
-import subprocess
 
 from pprint import pprint as pp
 from distutils.version import LooseVersion
