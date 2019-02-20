@@ -14,9 +14,10 @@ use File::Basename;
 use Sort::Versions;
 use Term::ANSIColor;
 use Data::Dump;
+use Text::CSV;
 
 my $scriptname = basename($0);
-my $version = "v5.15.021319";
+my $version = "v5.16.022019";
 
 # Remove when in prod.
 #print "\n";
@@ -440,15 +441,18 @@ sub raw_output {
     # another tool for further parsing.
     my ($snv_indels, $fusion_data, $cnv_data) = @_;
     my $mapd = $$cnv_data{'META'}[2];
-    select $out_fh;
+
+    my $csv = Text::CSV->new({binary => 1, eol => $/ });
 
     for my $var (sort{ versioncmp( $a, $b ) } keys %$snv_indels) {
-        print join(',', 'SNV', @{$$snv_indels{$var}}), "\n";
+        unshift(@{$$snv_indels{$var}}, 'SNV');
+        $csv->print($out_fh, \@{$$snv_indels{$var}});
     }
 
     for my $var (sort{ versioncmp($$cnv_data{$a}->[0], $$cnv_data{$b}->[0])} keys %$cnv_data) {
         next if $var eq 'META';
-        print join(',', 'CNV', $var, @{$$cnv_data{$var}}, $mapd), "\n";
+        my @outdata = ('CNV', $var, @{$$cnv_data{$var}}, $mapd);
+        $csv->print($out_fh, \@outdata);
     }
 
     # Do not output fusion results if blood since no fusion panel run.
@@ -458,8 +462,10 @@ sub raw_output {
     for my $var ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
         next if grep {$var eq $_} @skipped_keys;
         my ($fusion, $junct, $id) = split( /\|/, $var );
-        print join(',', 'Fusion', "$fusion.$junct", $id, $$fusion_data{$var}->{'COUNT'}, 
-            $$fusion_data{$var}->{'DRIVER'}, $$fusion_data{$var}->{'PARTNER'}), "\n";
+        my @outdata = ('Fusion', "$fusion.$junct", $id, 
+            $$fusion_data{$var}->{'COUNT'}, $$fusion_data{$var}->{'DRIVER'},
+            $$fusion_data{$var}->{'PARTNER'});
+        $csv->print($out_fh, \@outdata);
     }
     return;
 }
