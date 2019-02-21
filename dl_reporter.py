@@ -21,7 +21,7 @@ from pprint import pprint as pp
 
 from matchbox_api_utils import TreatmentArms
 
-version = '0.6.022019'
+version = '0.8.022119'
 match_arms = TreatmentArms(matchbox='adult', quiet=True)
 sys.stderr.write("Note: using version %s of Treatment Arms DB.\n" 
     % match_arms.db_date)
@@ -35,7 +35,6 @@ def get_args():
     )
     parser.add_argument(
         '-o', '--outfile', 
-        #default='output.csv', 
         metavar='<outfile>',
         help='Custom output file (DEFAULT: %(default)s)'
     )
@@ -107,13 +106,23 @@ def build_variant_dict(variant_data, status, outside):
         elif var[0] == 'Fusion':
             var_query['type']       = 'fusions'
             var_query['gene']       = var[4]
-            var_query['identifier'] = '{}.{}'.format(var[1], var[2])
+            # The ID matching string is complicated. The MB team has some
+            # variability in there that we need to code around.
+            if var[2] not in ('-', '.'):
+                var_query['identifier'] = '{}.{}'.format(var[1], var[2])
+            else:
+                var_query['identifier'] = var[1]
 
         if status == 'ALL':
             status = None
 
         # Add the aMOI mapping data from MATCHbox.
+        # print('-'*50)
+        # pp(var_query)
         arms = match_arms.map_amoi(var_query, outside=outside, status=status)
+        # pp(arms)
+        # print('-'*50)
+
         if arms:
             var.append(';'.join(arms))
         else:
