@@ -21,7 +21,7 @@ from pprint import pprint as pp
 
 from matchbox_api_utils import TreatmentArms
 
-version = '0.8.022119'
+version = '0.9.022619'
 match_arms = TreatmentArms(matchbox='adult', quiet=True)
 sys.stderr.write("Note: using version %s of Treatment Arms DB.\n" 
     % match_arms.db_date)
@@ -34,22 +34,23 @@ def get_args():
         help = 'Input VCF file to run.'
     )
     parser.add_argument(
-        '-o', '--outfile', 
-        metavar='<outfile>',
-        help='Custom output file (DEFAULT: %(default)s)'
-    )
-    parser.add_argument(
         '-s', '--status',
         metavar = "<Arm Status>",
         choices = ['ALL', 'OPEN', 'CLOSED', 'SUSPENDED'],
         default = 'OPEN',
-        help='Only output arms with this status. Default: %(default)s.'
+        help='Only output arms with this status. Valid choices are %(choices)s '
+            'Default: %(default)s.'
     )
     parser.add_argument(
         '-d', '--dl_excluded',
         action="store_false",
         help='Do not restrict output to arms that are open to the Designated '
             'Labs program.'
+    )
+    parser.add_argument(
+        '-o', '--outfile', 
+        metavar='<outfile>',
+        help='Custom output file (DEFAULT: %(default)s)'
     )
     parser.add_argument(
         '-v', '--version', 
