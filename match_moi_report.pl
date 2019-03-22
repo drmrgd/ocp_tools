@@ -17,7 +17,7 @@ use Data::Dump;
 use Text::CSV;
 
 my $scriptname = basename($0);
-my $version = "v5.16.022019";
+my $version = "v5.20.031819-dev";
 
 # Remove when in prod.
 #print "\n";
