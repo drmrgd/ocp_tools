@@ -15,13 +15,14 @@ import os
 import re
 import subprocess
 import argparse
+from termcolor import colored
 from natsort import natsorted
 from collections import defaultdict
 from pprint import pprint as pp
 from multiprocessing.pool import ThreadPool
 
-version = '4.0.031519'
-debug = True
+version = '4.0.042919'
+debug = False
 
 def get_args():
     # Default thresholds. Put them here rather than fishing below.
@@ -31,10 +32,12 @@ def get_args():
     cl = None
     reads = 1000
 
-    parser = argparse.ArgumentParser(
-            formatter_class = lambda prog: argparse.HelpFormatter(prog, 
-                max_help_position = 100, width=200),
-            description = __doc__,
+    parser = argparse.ArgumentParser(description = __doc__)
+    parser.add_argument(
+        'vcf_files',
+        metavar="<vcf_files>",
+        nargs="+",
+        help="List of VCF files to process."
     )
     parser.add_argument(
         '--cn', 
@@ -81,6 +84,14 @@ def get_args():
         action='store_true', 
         help='Data comes from blood specimens, and therefore we only have DNA '
             'data.'
+    )
+    parser.add_argument(
+        '-n', '--num_procs',
+        metavar="INT <num_procs>",
+        type=int,
+        default=num_procs,
+        help='Number of thread pools to use. {}'.format(
+            colored('DEFAULT: %(default)s procs', 'green'))
     )
     parser.add_argument(
         '-o','--output', 
@@ -165,9 +176,7 @@ def gen_moi_report(vcf, cnv_args, reads, proc_type, study, blood):
 
     if p.returncode != 0:
         sys.stderr.write("ERROR: Can not process file: {}!\n".format(vcf))
-        raise(error)
-    elif 'foo' == True:
-        pass
+        raise Exception(error)
     else:
         # need a tuple to track threads and not crash dict entries if we're 
         # doing multithreaded processing.
@@ -276,8 +285,8 @@ def non_threaded_proc(vcf_files, cnv_args, reads, study, blood):
                 blood)
     return moi_data
 
-def threaded_proc(vcf_files,cnv_params,reads,study,blood):
-    pool = ThreadPool(48)
+def threaded_proc(num_procs, vcf_files, cnv_params, reads, study, blood):
+    pool = ThreadPool(num_procs)
     moi_data = defaultdict(dict)
     task_list = [(x,cnv_params,str(reads),'threaded',study,blood) for x in vcf_files]
     try:
@@ -289,51 +298,44 @@ def threaded_proc(vcf_files,cnv_params,reads,study,blood):
         sys.exit(1)
     return moi_data
 
-def print_title(fh,**kwargs):
+def print_title(fh, cu, cl, cn, reads, pedmatch):
     '''Print out a header to remind me just what params I used this time!'''
-    cnv_params = parse_cnv_params(kwargs['cu'],kwargs['cl'],kwargs['cn'])
-    string_params = '='.join([str(x).lstrip('--') for x in cnv_params])
+    cnv_params = parse_cnv_params(cu, cl, cn)
+    #string_params = '='.join([str(x).lstrip('--') for x in cnv_params])
+    string_params = '='.join([x.lstrip('--') for x in cnv_params])
     if 'cl' in string_params:
         string_params = string_params.replace('=cl','; cl')
-    if kwargs['pedmatch']:
+    if pedmatch:
         study_name = 'Pediatric MATCH'
     else:
         study_name = 'Adult MATCH'
 
     fh.write('-'*95)
     fh.write('\nCollated {} MOI Reports Using Params CNV: {}, Fusion Reads: '
-        'reads={}\n'.format(study_name,string_params,kwargs['reads']))
+        'reads={}\n'.format(study_name, string_params, reads))
     fh.write('-'*95)
     fh.write('\n')
     return
 
-def main():
-    args = get_args()
-    if debug:
-        print('CLI args as passed:')
-        pp(vars(args))
-        print('')
-
+def main(vcfs, cn, cu, cl, reads, pedmatch, blood, output, num_procs, quiet):
     # Setup an output file if we want one
     outfile = ''
-    if args.output:
-        print("Writing output to '%s'" % args.output)
-        outfile = open(args.output, 'w')
+    if output:
+        print("Writing output to '%s'" % output)
+        outfile = open(output, 'w')
     else:
         outfile = sys.stdout
 
     # handle complex CNV args
-    cnv_args = parse_cnv_params(args.cu,args.cl,args.cn)
+    cnv_args = parse_cnv_params(cu, cl, cn)
 
-    if args.procs == '0':
-        moi_data = non_threaded_proc(args.vcf_files, cnv_args, args.reads,
-            args.pedmatch, args.blood)
+    if num_procs == '0':
+        moi_data = non_threaded_proc(vcfs, cnv_args, reads, pedmatch, blood)
     else:
-        moi_data = threaded_proc(args.vcf_files, cnv_args, args.reads, 
-            args.pedmatch, args.blood)
+        moi_data = threaded_proc(num_procs, vcfs, cnv_args, reads, pedmatch, blood)
 
     # Print data
-    print_title(outfile,**vars(args))
+    print_title(outfile, cu, cl, cn, reads, pedmatch)
     header = ['Sample', 'Type', 'Gene', 'Position', 'Ref', 'Alt', 
         'Transcript', 'CDS', 'AA', 'VARID', 'VAF/CN', 'Coverage/Counts',
         'RefCov', 'AltCov', 'Function', 'Location']
@@ -344,9 +346,15 @@ def main():
     for sample in sorted(moi_data):
         for var_type in var_types:
             try:
-                print_data(var_type,moi_data[sample][var_type],outfile)
+                print_data(var_type, moi_data[sample][var_type], outfile)
             except KeyError:
                 continue
 
 if __name__ == '__main__':
-    main()
+    args = get_args()
+    if debug:
+        print('CLI args as passed:')
+        pp(vars(args))
+        print('')
+    main(args.vcf_files, args.cn, args.cu, args.cl, args.reads, args.pedmatch, 
+            args.blood, args.output, args.num_procs, args.quiet)
