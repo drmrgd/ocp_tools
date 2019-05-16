@@ -11,13 +11,12 @@ Comprehensive Assay (OCA) system, run through the MATCH MOI Reporter script and
 generate a list of variants that would be inclusionary for the NCI-MATCH Outside
 Labs (AKA Designated Labs) initiative.
 """
-import os
 import sys
 import csv
 import argparse
 import subprocess
 
-from pprint import pprint as pp
+from pprint import pprint as pp # noqa 
 
 from matchbox_api_utils import TreatmentArms
 
@@ -79,10 +78,11 @@ def read_vcf(vcf, status, outside):
         sys.stderr.write("%s" % perr)
         sys.stderr.flush()
     else:
-        var_data = csv.reader(pout.split('\n'), delimiter=',')
-
+        var_data = list(x for x in csv.reader(pout.split('\n'), delimiter=',')
+                if x)
         # Always get a blank line in the output, which we don't want. 
-        return build_variant_dict(list(var_data)[:-1], status, outside)
+        #  return build_variant_dict(list(var_data)[:-1], status, outside)
+        return build_variant_dict(var_data, status, outside)
 
 def build_variant_dict(variant_data, status, outside):
     """
