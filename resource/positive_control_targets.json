@@ -1,0 +1,41 @@
+{
+    "v1" : {
+        "chr3:178916946:G:C:PIK3CA"  : "",
+        "chr7:140453136:A:T:BRAF"    : "",
+        "chr10:89717716:T:TA:PTEN"   : "",
+        "chr13:32968850:C:A:BRCA2"   : "",
+        "chr13:48916815:CACTT:C:RB1" : "",
+        "chr17:7574002:CG:C:TP53"    : "",
+        "chr17:ERBB2"                : "",
+        "chr17:RPS6KB1"              : "",
+        "chr20:ZNF217"               : "",
+        "EML4-ALK.E6aA20"            : "",
+        "EML4-ALK.E6bA20"            : ""
+    },
+    "v2" : {
+        "chr3:178916946:G:C:PIK3CA"  : "",
+        "chr7:140453136:A:T:BRAF"    : "",
+        "chr10:89717715:T:TA:PTEN"   : "",
+        "chr13:32968850:C:A:BRCA2"   : "",
+        "chr13:48916815:CACTT:C:RB1" : "",
+        "chr17:7574002:CG:C:TP53"    : "",
+        "chr17:ERBB2"                : "",
+        "chr17:RPS6KB1"              : "",
+        "chr20:ZNF217"               : "",
+        "ALK-PTPN3.A11P3"            : "",
+        "EML4-ALK.E6aA20"            : "",
+        "MET-MET.M13M15"             : ""
+    },
+    "v3" : {
+        "chr3:178916946:G:C:PIK3CA"  : "",
+        "chr3:49412973:C:T:RHOA"     : "",
+        "chr7:140453136:A:T:BRAF"    : "",
+        "chr10:89717715:T:TA:PTEN"   : "",
+        "chr13:32968850:C:A:BRCA2"   : "",
+        "chr13:48916815:CACTT:C:RB1" : "",
+        "chr16:89815074:GA:G:FANCA"  : "",
+        "chr17:7574002:CG:C:TP53"    : "",
+        "chr17:ERBB2"                : "",
+        "CCDC6-RET.C1R12"            : ""
+    }
+}
