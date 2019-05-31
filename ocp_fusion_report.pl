@@ -1,7 +1,8 @@
-#!/usr/bin/perl
-# Generate a fusion report from VCF files derived from and IR analysis.  Can output either annotated
-# fusions only or both annotated and novel fusions.  Can also choose to output ref calls in addtion
-# to variant calls to make a more complete report.
+#!/usr/bin/env perl
+# Generate a fusion report from VCF files derived from and IR analysis.  Can 
+# output either annotated fusions only or both annotated and novel fusions. Can
+# also choose to output ref calls in addtion to variant calls to make a more 
+# complete report.
 #
 # 6/9/2014 - D Sims
 #######################################################################################################
@@ -16,10 +17,10 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v4.0.1_0612017";
+my $version = "v4.1.053119-dev";
 my $description = <<"EOT";
-Print out a summary table of fusions detected by the OCP Fusion Workflow VCF files. Can choose to output
-anything seen, or just limit to annotated fusions.
+Print out a summary table of fusions detected by the OCP Fusion Workflow VCF 
+files. Can choose to output anything seen, or just limit to annotated fusions.
 EOT
 
 my $usage = <<"EOT";
@@ -28,6 +29,7 @@ USAGE: $scriptname [options] <vcf_file(s)>
     -n, --novel     Include 'Non-Targeted' fusions in the output (DEFAULT: OFF).
     -t, --threshold Only report fusions above this threshold (DEFAULT: 25).
     -g, --gene      Only output data for a specific driver gene or genes separated by a comma. 
+    -f, --forks     Number of processes to run at once (DEFAULT: 24).
     -N, --NOCALL    Don't report NOCALL or FAIL Fusions.
     -r, --raw       Raw output rather that pretty printed file.
     -o, --output    Write output to file.
@@ -44,6 +46,7 @@ my $gene;
 my $threshold = 25;
 my $raw_output;
 my $nocall;
+my $num_procs = 24;
 
 GetOptions( 
     "Ref|R"         => \$ref_calls,
@@ -53,6 +56,7 @@ GetOptions(
     "output|o=s"    => \$outfile,
     "raw|r"         => \$raw_output,
     "NOCALL|N"      => \$nocall,
+    "forks|f=i"     => \$num_procs,
     "help|h"        => \$help,
     "version|v"     => \$ver_info,
 );
@@ -80,7 +84,8 @@ if ( @ARGV < 1 ) {
 # Set up output
 my $out_fh;
 if ( $outfile ) {
-    open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
+    open( $out_fh, ">", $outfile ) 
+        || die "Can't open the output file '$outfile' for writing: $!";
 } else {
     $out_fh = \*STDOUT;
 }
@@ -91,14 +96,15 @@ my $novel;
 my @files = @ARGV;
 my @genes_list = map{uc($_)} split(/,/, $gene) if $gene;
 
-#######===========================  END ARG Parsing  #######=========================== 
+#######======================  END ARG Parsing  ======================#######
 my %results;
 my $fwidth=0;
 
-my $pm = new Parallel::ForkManager(48);
+my $pm = Parallel::ForkManager->new($num_procs);
 $pm->run_on_finish(
     sub {
-        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data_structure_reference) = @_;
+        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, 
+            $data_structure_reference) = @_;
         my $vcf  = $data_structure_reference->{input};
         my $name = $data_structure_reference->{id};
         $name //= basename($vcf);
@@ -138,7 +144,8 @@ for my $sample ( sort keys %results ) {
             }
             my ($fusion, $junct, $id ) = split(/\|/, $entry);
             next if $results{$sample}->{$entry}->{'COUNT'} < $threshold && ! $ref_calls;
-            print_data(\$sample, "$fusion.$junct", \$id, $results{$sample}->{$entry}, \$fusion_format);
+            print_data(\$sample, "$fusion.$junct", 
+                \$id, $results{$sample}->{$entry}, \$fusion_format);
         }
     } else {
         print "\t\t\t<<< No Fusions Detected >>>\n\n" unless $raw_output;
@@ -147,11 +154,13 @@ for my $sample ( sort keys %results ) {
 
 sub proc_vcf {
     my $vcf = shift;
-    # Version 1,2, and 3 drivers. Not all exist in the current version, but keep all for backward compatibility.
-    my @drivers = qw(ABL1 AKT2 AKT3 ALK AR AXL BRAF BRCA1 BRCA2 CDKN2A EGFR ERBB2 ERBB4 ERG ESR1 ETV1 ETV1a 
-                     ETV1b ETV4 ETV4a ETV5 ETV5a ETV5d FGFR1 FGFR2 FGFR3 FGR FLT3 JAK2 KRAS MDM4 MET MYB MYBL1 
-                     NF1 NOTCH1 NOTCH4 NRG1 NTRK1 NTRK2 NTRK3 NUTM1 PDGFRA PDGFRB PIK3CA PPARG PRKACA PRKACB 
-                     PTEN RAD51B RAF1 RB1 RELA RET ROS1 RSPO2 RSPO3 TERT
+    # Version 1,2, and 3 drivers. Not all exist in the current version, but 
+    # keep all for backward compatibility.
+    my @drivers = qw(ABL1 AKT2 AKT3 ALK AR AXL BRAF BRCA1 BRCA2 CDKN2A EGFR 
+        ERBB2 ERBB4 ERG ESR1 ETV1 ETV1a ETV1b ETV4 ETV4a ETV5 ETV5a ETV5d FGFR1
+        FGFR2 FGFR3 FGR FLT3 JAK2 KRAS MDM4 MET MYB MYBL1 NF1 NOTCH1 NOTCH4 NRG1
+        NTRK1 NTRK2 NTRK3 NUTM1 PDGFRA PDGFRB PIK3CA PPARG PRKACA PRKACB PTEN 
+        RAD51B RAF1 RB1 RELA RET ROS1 RSPO2 RSPO3 TERT
     );
 
     my %results;
@@ -164,7 +173,8 @@ sub proc_vcf {
         next if /^#/;
         my @data = split;
 
-        # Get rid of FAIL and NOCALL calls to be more compatible with MATCHBox output.
+        # Get rid of FAIL and NOCALL calls to be more compatible with MATCHBox 
+        # output.
         next if $nocall && ($data[6] eq 'FAIL' || $data[6] eq 'NOCALL');
 
         if ( $data[7] =~ /SVTYPE=Fusion/ ) {
@@ -209,9 +219,11 @@ sub print_data {
     my ($sample_name,$fusion_name,$id,$data,$format) = @_;
 
     if ($raw_output) {
-        print join(',', $$sample_name, $fusion_name, $$id, $$data{'COUNT'}, $$data{'DRIVER'}), "\n";
+        print join(',', $$sample_name, $fusion_name, $$id, $$data{'COUNT'}, 
+            $$data{'DRIVER'}), "\n";
     } else {
-        printf $$format, $fusion_name, $$id, $$data{'COUNT'}, $$data{'DRIVER'}, $$data{'PARTNER'};
+        printf $$format, $fusion_name, $$id, $$data{'COUNT'}, $$data{'DRIVER'}, 
+        $$data{'PARTNER'};
     }
     return;
 }
