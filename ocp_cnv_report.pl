@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # Read in VCF file from IR and output called CNVs
 # 9/20/2014 - D Sims
 #################################################################################################
@@ -17,7 +17,7 @@ use Term::ANSIColor;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v3.2.0_111716";
+my $version = "v3.4.053119-dev";
 
 # Remove when in prod.
 #print "\n";
@@ -27,28 +27,38 @@ my $version = "v3.2.0_111716";
 #print "\n\n";
 
 my $description = <<"EOT";
-Input one more more VCF files from IR output and generate a report of called CNVs. Can print anything
-called a CNV, or filter based on gene name, copy number, number of tiles, or hotspot calls. Also can output
-a raw formatted table that is easily imported into Excel and R for downstream analysis.
+Input one more more VCF files from IR output and generate a report of called 
+CNVs. Can print anything called a CNV, or filter based on gene name, copy 
+number, number of tiles, or hotspot calls. Also can output a raw formatted table
+that is easily imported into Excel and R for downstream analysis.
 EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF_file(s)>
     Filter Options
-    --cn  INT      Only report amplifications above this threshold (DEFAULT: CN >= 0)
-    --cu  INT      Upper bound for amplifications based on 5% CI (DEFAULT: 5% CI >= 4)
-    --cl  INT      Lower bound for deletions based on 95% CI (DEFAULT: 95% CI <= 1)
-    -n, --novel    Print non-HS CNVs (Default = OFF)
-    -g, --gene     Print out results for this gene only. Can also input a list of comma separated gene names to search 
-    -t, --tiles    Only print out results for CNVs with at least this many tiles.
-    -a, --annot    Only print CNVs with Oncomine Annotations.
-    -N, --NOCALL   Do not output NOCALL results (Default: OFF)
+    --cn  INT        Only report amplifications above this threshold (DEFAULT: 
+                     CN >= 0)
+    --cu  INT        Upper bound for amplifications based on 5% CI (DEFAULT: 
+                     5% CI >= 4)
+    --cl  INT        Lower bound for deletions based on 95% CI (DEFAULT: 
+                     95% CI <= 1)
+    -n, --novel      Print non-HS CNVs (Default = OFF)
+    -g, --gene       Print out results for this gene only. Can also input a list
+                     of comma separated gene names to search 
+    -t, --tiles      Only print out results for CNVs with at least this many 
+                     tiles.
+    -a, --annot      Only print CNVs with Oncomine Annotations.
+    -n, --num_procs  Number of processor cores to use to process files in 
+                     parallel. (Default: 48).
+    -N, --NOCALL     Do not output NOCALL results (Default: OFF)
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
-    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty print (as 'pp').  DEFAULT: pp. 
+    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or 
+                      pretty print (as 'pp').  DEFAULT: pp. 
                       This format still retains the header and other data.
-    -r, --raw         Output as a raw CSV format that can be input into Excel.  The header output is not in columns as 
+    -r, --raw         Output as a raw CSV format that can be input into Excel.
+                      The header output is not in columns as 
                       a part of the whole.
     -v, --version     Version information
     -h, --help        Print this help information
@@ -67,6 +77,7 @@ my $annot;
 my $nocall;
 my $format = 'pp';
 my $raw_output;
+my $num_procs = 48;
 
 GetOptions( "novel|n"             => \$novel,
             "copy-number|cn=f"    => \$copy_number,
@@ -79,6 +90,7 @@ GetOptions( "novel|n"             => \$novel,
             "format|f=s"          => \$format,
             "raw|r"               => \$raw_output,
             "NOCALL|N"            => \$nocall,
+            "num_procs|n=i"       => \$num_procs,
             "version|v"           => \$ver_info,
             "help|h"              => \$help )
         or die $usage;
@@ -134,7 +146,9 @@ my %formats = (
 
 # Set the output format delimiter
 my $delimiter;
-die "ERROR: '$format' is not a valid option as a delimiter!\n" unless defined $formats{$format};
+unless (defined $formats{$format}) {
+    die "ERROR: '$format' is not a valid option as a delimiter!\n";
+}
 ($format) ? ($delimiter = $formats{$format}) : ($delimiter = $formats{pp});
 
 # Make sure enough args passed to script
@@ -147,19 +161,20 @@ if ( scalar( @ARGV ) < 1 ) {
 # Write output to either indicated file or STDOUT
 my $out_fh;
 if ( $outfile ) {
-	open( $out_fh, ">", $outfile ) || die "Can't open the output file '$outfile' for writing: $!";
+	open( $out_fh, ">", $outfile );
 } else {
 	$out_fh = \*STDOUT;
 }
 
-#########------------------------------ END ARG Parsing ---------------------------------#########
+#########--------------------- END ARG Parsing -----------------------#########
 my %cnv_data;
 my @vcfs = @ARGV;
 
-my $pm = new Parallel::ForkManager(48);
+my $pm = Parallel::ForkManager->new($num_procs);
 $pm->run_on_finish(
     sub {
-        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data_structure_reference) = @_;
+        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, 
+            $data_structure_reference) = @_;
         my $vcf = $data_structure_reference->{input};
         my $name = $data_structure_reference->{id};
         $name //= basename($vcf);
@@ -181,6 +196,9 @@ for my $input_file (@vcfs) {
 }
 $pm->wait_all_children;
 
+#dd \%cnv_data;
+# exit;
+
 my %results;
 for my $sample ( keys %cnv_data ) {
     $results{$sample} = [];
@@ -189,14 +207,17 @@ for my $sample ( keys %cnv_data ) {
         my %mapped_cnv_data;
         last if $cnv eq 'NONE';
 
-        # Seems to be a bug in the same the CI are reported for deletions.  Solution correctly reports the value
-        # in the VCF, but it's not so informative.  This will give a better set of data.
+        # Seems to be a bug in the same the CI are reported for deletions.
+        # Solution correctly reports the value in the VCF, but it's not so 
+        # informative.  This will give a better set of data.
         my ($ci_5, $ci_95) = $cnv_data{$sample}->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/; 
         my ($chr, $start, $gene, undef) = split( /:/, $cnv );
         %mapped_cnv_data = map{ $_ => $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
-        @mapped_cnv_data{qw(ci_05 ci_95)} = (sprintf("%.2f",$ci_5),sprintf("%.2f",$ci_95));
+        @mapped_cnv_data{qw(ci_05 ci_95)} = (sprintf("%.2f",$ci_5),
+            sprintf("%.2f",$ci_95));
         @mapped_cnv_data{qw(chr start gene undef)} = split(/:/, $cnv);
-        $mapped_cnv_data{HS} //= 'No';
+
+        $mapped_cnv_data{HS}    //= 'No';
         $mapped_cnv_data{ci_05} //= 0;
         $mapped_cnv_data{ci_95} //= 0;
 
@@ -222,8 +243,10 @@ print_results(\%results, $delimiter);
 
 sub print_results {
     my ($data, $delimiter) = @_;
-    my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN Annot );
-    my $pp_format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s\n";
+    my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95
+        CN Annot );
+    my $pp_format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s 
+        %-18s\n";
 
     select $out_fh;
 
@@ -232,13 +255,18 @@ sub print_results {
 
     for my $sample (keys %$data) {
         my ($id, $gender, $mapd, $cellularity) = split( /:/, $sample );
-        print "::: CNV Data For $id (Gender: $gender, Cellularity: $cellularity, MAPD: $mapd) :::\n";
-        ($delimiter) ? print join($delimiter, @header),"\n" : printf $pp_format, @header;
+        print "::: CNV Data For $id (Gender: $gender, Cellularity: ", 
+            "$cellularity, MAPD: $mapd) :::\n";
+        ($delimiter) 
+            ? print join($delimiter, @header),"\n" 
+            : printf $pp_format, @header;
         if ( ! @{$$data{$sample}} ) {
             print ">>>>  No Reportable CNVs Found in Sample  <<<<\n"; 
         } else {
             for my $cnv (@{$$data{$sample}}) {
-                ($delimiter) ? print join($delimiter, @$cnv), "\n" : printf $pp_format, @$cnv;
+                ($delimiter) 
+                    ? print join($delimiter, @$cnv), "\n" 
+                    : printf $pp_format, @$cnv;
             }
         }
         print "\n";
@@ -248,7 +276,8 @@ sub print_results {
 
 sub raw_output {
     my $data = shift;
-    my @header = qw( Sample Gender Cellularity MAPD Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95 CN Annot );
+    my @header = qw( Sample Gender Cellularity MAPD Chr Gene Start End Length 
+        Tiles Raw_CN Ref_CN CI_05 CI_95 CN Annot );
     select $out_fh;
     print join(',', @header), "\n";
 
@@ -279,18 +308,21 @@ sub filter_results {
     return if ($$filters{annot} and $$data{GC} eq '---');
     
     # We made it the whole way through; check for copy number thresholds
-    (copy_number_filter($data, \@cn_thresholds)) ? return return_data($data) : return;
+    (copy_number_filter($data, \@cn_thresholds)) 
+        ? return return_data($data) 
+        : return;
 }
 
 sub return_data {
     my $data = shift;
-    my @fields = qw(chr gene start END LEN NUMTILES RAW_CN REF_CN ci_05 ci_95 CN GC);
+    my @fields = qw(chr gene start END LEN NUMTILES RAW_CN REF_CN ci_05 ci_95 
+        CN GC);
     return @$data{@fields};
 }
 
 sub copy_number_filter {
-    # if there is a 5% / 95% CI filter, use that, otherwise if there's a cn filter use that, and 
-    # if there's nothing, just return it all.
+    # if there is a 5% / 95% CI filter, use that, otherwise if there's a cn 
+    # filter use that, and if there's nothing, just return it all.
     my ($data, $threshold) = @_;
     my ($cn, $cu, $cl) = @$threshold;
 
@@ -322,7 +354,8 @@ sub proc_vcf {
             if ( $_ =~ /sampleGender=(\w+)/ ) {
                 $gender = $1 and next;
             }
-            # Need to add to accomodate the new CNV plugin; may not have the same field as the normal IR data.
+            # Need to add to accomodate the new CNV plugin; may not have the 
+            # same field as the normal IR data.
             if ($_ =~ /AssumedGender=([mf])/) {
                 ($1 eq 'm') ? ($gender='Male') : ($gender='Female');
                 next;
@@ -339,10 +372,11 @@ sub proc_vcf {
         if ( $data[0] =~ /^#/ ) {
             $sample_name = $data[-1] and next;
         }
-        next unless $data[4] eq '<CNV>';
         $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
 
-        # Let's handle NOCALLs for MATCHBox compatibility (prefer to filter on my own though).
+        next unless $data[4] eq '<CNV>';
+        # Let's handle NOCALLs for MATCHBox compatibility (prefer to filter on 
+        # my own though).
         if ($nocall && $data[6] eq 'NOCALL') {
             ${$cnv_data{$sample_id}->{'NONE'}} = '';
             next;
@@ -350,9 +384,14 @@ sub proc_vcf {
 
         my $varid = join( ':', @data[0..3] );
         
-        # Kludgy, but need to deal with hotspots (HS) field; not like others!
+        # Will either get a HS entry in the line, or nothing at all. Kludgy, but
+        # need to deal with hotspots (HS) field; not like others (i.e. not a 
+        # key=val struct)!
         $data[7] =~ s/HS/HS=Yes/;
-        $data[7] =~ s/SD;/SD=NA;/; # sometimes data in this field and sometimes not.  
+
+        # New v5.2 standard deviation value; sometimes data in this field and 
+        # sometimes not. 
+        $data[7] =~ s/SD;/SD=NA;/; 
 
         my @format = split( /;/, $data[7] );
         my ($cn) = $data[9] =~ /:([^:]+)$/;
@@ -374,7 +413,8 @@ sub proc_vcf {
 sub __exit__ {
     my ($line, $msg) = @_;
     print "\n\n";
-    print colored("Got exit message at line: $line with message:\n$msg", 'bold white on_green');
+    print colored("Got exit message at line: $line with message:\n$msg", 
+        'bold white on_green');
     print "\n";
     exit;
 }
