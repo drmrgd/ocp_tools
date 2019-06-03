@@ -1,8 +1,8 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # Parse a VCF file and generate a table of MOIs and aMOIs
 #
 # 2/12/2014 - D Sims
-####################################################################################
+################################################################################
 use warnings;
 use strict;
 use autodie;
@@ -15,9 +15,10 @@ use Sort::Versions;
 use Term::ANSIColor;
 use Data::Dump;
 use Text::CSV;
+use List::Util qw(max);
 
 my $scriptname = basename($0);
-my $version = "v5.20.031819-dev";
+my $version = "v5.21.053119-dev";
 
 # Remove when in prod.
 #print "\n";
@@ -140,7 +141,7 @@ my @blacklisted_variants = map{ chomp; $_ } <$fh>;
 close $fh;
 
 if (DEBUG) {
-    print "============================  DEBUG  ============================\n";
+    print "===========================  DEBUG  ===========================\n";
     print "Params as passed into script:\n";
     print "\tCNV Threshold      => $cn_cutoff\n";
     print "\tVAF Threshold      => $freq_cutoff\n";
@@ -150,19 +151,23 @@ if (DEBUG) {
     print "\tPediatric Blood    => $blood\n";
     ($outfile) ? print " $outfile\n" : print "\n";
     print "\tBlacklist version  => $blist_ver\n";
-    print "=================================================================\n\n";
+    print "===============================================================\n\n";
 }
 
 # Check ENV for required programs
 my @required_programs = qw( vcfExtractor.pl ocp_cnv_report.pl 
     ocp_control_summary.pl ocp_fusion_report.pl match_rna_qc.pl );
 for my $prog (@required_programs) {
-    die "ERROR: '$prog' is required, but not found in your path!\n" unless qx(which $prog);
+    unless (qx( which $prog )) {
+        die "ERROR: '$prog' is required, but not found in your path!\n";
+    }
 } 
 
 ########--------------------- END ARG Parsing ------------------------#########
 my $vcf_file = shift;
-die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n" unless -e $vcf_file;
+unless (-e $vcf_file) {
+    die "ERROR: '$vcf_file' does not exist or is not a valid VCF file!\n";
+}
 
 my $current_version = version->parse('2.3');
 my $assay_version = version->parse( vcf_version_check(\$vcf_file) );
@@ -193,8 +198,10 @@ sub vcf_version_check {
     open(my $vcf_fh, "<", $$vcf);
     my @header = grep{ /^#/ } <$vcf_fh>;
     die "ERROR: The input file '$$vcf' does not appear to be a valid VCF file!\n" unless @header;
+    
     die "ERROR: You have tried to load a VCF file witout fusion data and without ",
         "selecting the DNA only option!\n" unless grep {/Fusion/} @header or $blood;
+
     my ($ovat_ver) = map { /^##OncomineVariantAnnotationToolVersion=(\d+\.\d+)\.\d+/ } @header;
     return $ovat_ver;
 }
@@ -211,13 +218,14 @@ sub proc_snv_indel {
     # warning.
     my $first_line = <$vcf_data>;
     if ($first_line =~ /[\*]+/) {
-        warn "Using dev version of vcfExtractor!!\n";
+        #warn "Using dev version of vcfExtractor!!\n";
         print $first_line;
         while ($. < 4) {
             my $line = <$vcf_data>;
             print $line;
         }
     }
+
     while (<$vcf_data>) {
         next unless /^chr/;
         my @fields = split;
@@ -288,8 +296,7 @@ sub proc_snv_indel {
 
 sub gen_var_entry {
     my ($data, $rule) = @_;
-    # return [@$data[0..11,13,14],$rule];
-    return [@$data[0..14],$rule];
+    return [@$data[0..14], $rule];
 }
 
 sub proc_fusion {
@@ -389,43 +396,36 @@ sub proc_cnv {
 }
 
 sub field_width {
-    # Get the longest field width for formatting later.
     my ($data_ref, $type) = @_;
+    my (@refs, @alts, @cds, @aa, @func, @fusion);
 
-    my $ref_width = 0;
-    my $alt_width = 0;
-    my $cds_width = 0;
-    my $aa_width  = 0;
-    my $func_width = 0;
+    # DEBUG : Get the indices of the array elems to help below.
+    # while (my ($k, $v) = each %$data_ref) {
+        # for my $i (0..$#{$v}) {
+            # print "$i: $v->[$i]\n";
+        # }
+    # }
+    # exit;
 
-    my $fusion_id_width = 0;
-
-    if ( $type eq 'snv' ) {
-        while (my ($variant, $data) = each %$data_ref ) {
-            my $ref_len = length( $data->[1] ) + 2;
-            my $alt_len = length( $data->[2] ) + 2;
-            my $cds_len = length( $data->[10] ) + 2;
-            my $aa_len  = length( $data->[11] ) + 2;
-            my $func_len = length( $data->[12] ) + 2;
-
-            $ref_width = $ref_len if ( $ref_len > $ref_width );
-            $alt_width = $alt_len if ( $alt_len > $alt_width );
-            $cds_width = $cds_len if ( $cds_len > $cds_width );
-            $aa_width = $aa_len if ( $aa_len > $aa_width );
-            $func_width = $func_len if ( $func_len > $func_width );
+    if ($type eq 'snv') {
+        while (my ($variant, $data) = each %$data_ref) {
+            push(@refs, length($data->[1]));
+            push(@alts, length($data->[2]));
+            push(@cds,  length($data->[10]));
+            push(@aa,   length($data->[11]));
+            push(@func, length($data->[13]));
         }
-        return ( $ref_width, $alt_width, $cds_width, $aa_width, $func_width );
-    } 
-    elsif ( $type eq 'fusion' ) {
-        for my $variant ( keys %$data_ref ) {
-            my @id_elems = split( /\|/, $variant );
-            my $length = length( "$id_elems[0].$id_elems[1]" );
-            $fusion_id_width = $length if $length > $fusion_id_width;
-        }
-        return ( $fusion_id_width + 4 );
+        return max(@refs)+2, max(@alts)+2, max(@cds)+2, max(@aa)+2, max(@func)+2;
     }
-    return;
+    elsif ($type eq 'fusion') {
+        for my $variant (keys %$data_ref) {
+            my @id_elems = split(/\|/, $variant);
+            push(@fusion, length("$id_elems[0].$id_elems[1]"));
+        }
+        return max(@fusion) + 4;
+    }
 }
+
 
 sub print_msg {
     # Kludgy way to simulate tee, but with and without colored output (ANSI 
@@ -449,7 +449,9 @@ sub raw_output {
         $csv->print($out_fh, \@{$$snv_indels{$var}});
     }
 
-    for my $var (sort{ versioncmp($$cnv_data{$a}->[0], $$cnv_data{$b}->[0])} keys %$cnv_data) {
+    for my $var (sort{ 
+            versioncmp($$cnv_data{$a}->[0], $$cnv_data{$b}->[0])
+        } keys %$cnv_data) {
         next if $var eq 'META';
         my @outdata = ('CNV', $var, @{$$cnv_data{$var}}, $mapd);
         $csv->print($out_fh, \@outdata);
@@ -499,51 +501,51 @@ sub gen_report {
     print_msg("::: MATCH Reportable SNVs and Indels (VAF >= $freq_cutoff) :::\n",
         'ansi3');
 
-    my ($refwidth, $altwidth, $cdswidth, $aawidth, 
-        $funcwidth) = field_width( $snv_indels, 'snv' ) if $snv_indels;
+    if (%$snv_indels) {
+        my ($refwidth, $altwidth, $cdswidth, $aawidth, 
+            $funcwidth) = field_width( $snv_indels, 'snv' );
 
-    # Need some defaults if no data.
-    $refwidth  //= 5; 
-    $altwidth  //= 5;
-    $cdswidth  //= 5; 
-    $aawidth   //= 9; 
-    $funcwidth //= 10;
-    $funcwidth = 10 if $funcwidth < 10;
+        # Set some minimums in case there are small entries.
+        $refwidth  = 5 if $refwidth < 5;
+        $altwidth  = 5 if $altwidth < 5;
+        $cdswidth  = 5 if $cdswidth < 5;
+        $aawidth   = 9 if $aawidth < 9;
+        $funcwidth = 10 if $funcwidth < 10;
 
-    my %formatter = (
-        'Chrom:Pos'            => "%-16s",
-        'Ref'                  => "%-${refwidth}s",
-        'Alt'                  => "%-${altwidth}s",
-        'VAF'                  => '%-7s',
-        'TotCov'               => '%-7s',
-        'RefCov'               => '%-7s',
-        'AltCov'               => '%-7s',
-        'VARID'                => '%-12s',
-        'Gene'                 => '%-8s',
-        'Transcript'           => '%-16s',
-        'CDS'                  => "%-${cdswidth}s",
-        'Protein'              => "%-${aawidth}s",
-        'Exon'                 => "%-6s",
-        'Function'             => "%-${funcwidth}s",
-        'oncomineVariantClass' => '%-21s',
-        'FunctionalRule'       => '%s',
-    );
-    #dd \%formatter;
-    #exit;
+        my %formatter = (
+            'Chrom:Pos'            => "%-16s",
+            'Ref'                  => "%-${refwidth}s",
+            'Alt'                  => "%-${altwidth}s",
+            'VAF'                  => '%-7s',
+            'TotCov'               => '%-7s',
+            'RefCov'               => '%-7s',
+            'AltCov'               => '%-7s',
+            'VARID'                => '%-12s',
+            'Gene'                 => '%-8s',
+            'Transcript'           => '%-16s',
+            'CDS'                  => "%-${cdswidth}s",
+            'Protein'              => "%-${aawidth}s",
+            'Exon'                 => "%-6s",
+            'Function'             => "%-${funcwidth}s",
+            'oncomineVariantClass' => '%-21s',
+            'FunctionalRule'       => '%s',
+        );
+        #dd \%formatter;
+        #exit;
 
-    my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID
-        Gene Transcript CDS Protein Exon Function oncomineVariantClass 
-        FunctionalRule );
+        my @snv_indel_header = qw( Chrom:Pos Ref Alt VAF TotCov RefCov AltCov VARID
+            Gene Transcript CDS Protein Exon Function oncomineVariantClass 
+            FunctionalRule );
 
-    my $snv_indel_format = join(' ', @formatter{@snv_indel_header}) . "\n";
+        my $snv_indel_format = join(' ', @formatter{@snv_indel_header}) . "\n";
 
-    print_msg(sprintf($snv_indel_format, @snv_indel_header));
-    if ( %$snv_indels ) {
+        print_msg(sprintf($snv_indel_format, @snv_indel_header));
+
         for my $variant ( sort{ versioncmp( $a, $b ) } keys %$snv_indels ) {
             print_msg(sprintf($snv_indel_format, @{$$snv_indels{$variant}}));
         }
     } else {
-        print_msg(">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n", 
+        print_msg("\n\t>>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n", 
             "red on_black");
     }
     print_msg("\n");
@@ -555,12 +557,15 @@ sub gen_report {
     my ($gender, $cellularity, $mapd) = @{$$cnv_data{'META'}};
     delete $$cnv_data{'META'};
     
-    print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: $cellularity, MAPD: ", 'ansi3');
+    $cellularity = sprintf("%d%%", $cellularity * 100);
+    print_msg("::: MATCH Reportable CNVs (Gender: $gender, Cellularity: " . 
+        "$cellularity, MAPD: ", 'ansi3');
     $format_string = format_string($mapd, '>', 0.5);
     print_msg(@$format_string);
 
     if ($cn_upper_cutoff) {
-        print_msg( ", 5% CI >= $cn_upper_cutoff, 95% CI <= $cn_lower_cutoff) :::\n", "ansi3");
+        print_msg( ", 5% CI >= $cn_upper_cutoff, 95% CI <= $cn_lower_cutoff) :::\n", 
+            "ansi3");
     } else {
         my $cnv_param_string; 
         ($cn_cutoff == 4) 
@@ -569,11 +574,13 @@ sub gen_report {
         print_msg( "$cnv_param_string $cn_cutoff) :::\n", "ansi3");
     }
 
-    my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
-    print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
-
     if ( %$cnv_data ) {
-        for my $cnv ( sort{ versioncmp( $$cnv_data{$a}->[0], $$cnv_data{$b}->[0] ) } keys %$cnv_data ) {
+        my @cnv_header = qw( Chr Gene Tiles CI_05 CN CI_95 );
+        print_msg(sprintf("%-9s %-10s %-6s %-10s %-10s %-10s\n", @cnv_header));
+
+        for my $cnv ( sort{ 
+                versioncmp( $$cnv_data{$a}->[0], $$cnv_data{$b}->[0] ) 
+            } keys %$cnv_data ) {
             print_msg(sprintf('%-9s %-10s %-6s %-10.2f ', 
                     $$cnv_data{$cnv}->[0], $cnv, @{$$cnv_data{$cnv}}[1,2]));
             my @formatted_copy_number = sprintf('%-10.2f ', $$cnv_data{$cnv}[3]);
@@ -585,7 +592,7 @@ sub gen_report {
             print_msg(sprintf("%-10.2f\n", $$cnv_data{$cnv}[4]));
         }
     } else {
-        print_msg(">>>>  No Reportable CNVs Found in Sample  <<<<\n",
+        print_msg("\n\t>>>>  No Reportable CNVs Found in Sample  <<<<\n",
             "red on_black");
     }
     print_msg("\n");
@@ -646,11 +653,12 @@ sub gen_report {
     $read_count = commify($read_count);
     print_msg( "; Threshold: $read_count) :::\n",'ansi3');
 
-    my ($w1) = field_width( $fusion_data, 'fusion' );
-    my $fusion_format = "%-${w1}s %-12s %-12s %-15s %-15s\n";
-    my @fusion_header = qw( Fusion ID Read_Count Driver_Gene Partner_Gene );
-    print_msg(sprintf($fusion_format, @fusion_header));
     if ( %$fusion_data ) {
+        my ($w1) = field_width( $fusion_data, 'fusion' );
+        my $fusion_format = "%-${w1}s %-12s %-12s %-15s %-15s\n";
+        my @fusion_header = qw( Fusion ID Read_Count Driver_Gene Partner_Gene );
+        print_msg(sprintf($fusion_format, @fusion_header));
+
         for ( sort { versioncmp( $a, $b ) } keys %$fusion_data ) {
             my ($fusion, $junct, $id) = split( /\|/ );
             print_msg(sprintf($fusion_format, "$fusion.$junct", $id, 
@@ -658,9 +666,9 @@ sub gen_report {
                     $$fusion_data{$_}->{'PARTNER'}));
         }
     } else {
-        print_msg(">>>>  No Reportable Fusions found in Sample  <<<<\n", "red on_black");
+        print_msg("\n\t>>>>  No Reportable Fusions found in Sample  <<<<\n", 
+            "red on_black");
     }
-    return;
 }
 
 sub format_string {
