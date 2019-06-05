@@ -48,7 +48,7 @@ USAGE: $scriptname [options] <VCF_file(s)>
     -t, --tiles      Only print out results for CNVs with at least this many 
                      tiles.
     -a, --annot      Only print CNVs with Oncomine Annotations.
-    -n, --num_procs  Number of processor cores to use to process files in 
+    -p, --procs      Number of processor cores to use to process files in 
                      parallel. (Default: 48).
     -N, --NOCALL     Do not output NOCALL results (Default: OFF)
 
@@ -90,7 +90,7 @@ GetOptions( "novel|n"             => \$novel,
             "format|f=s"          => \$format,
             "raw|r"               => \$raw_output,
             "NOCALL|N"            => \$nocall,
-            "num_procs|n=i"       => \$num_procs,
+            "procs|p=i"       => \$num_procs,
             "version|v"           => \$ver_info,
             "help|h"              => \$help )
         or die $usage;

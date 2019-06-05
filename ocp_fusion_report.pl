@@ -29,7 +29,7 @@ USAGE: $scriptname [options] <vcf_file(s)>
     -n, --novel     Include 'Non-Targeted' fusions in the output (DEFAULT: OFF).
     -t, --threshold Only report fusions above this threshold (DEFAULT: 25).
     -g, --gene      Only output data for a specific driver gene or genes separated by a comma. 
-    -f, --forks     Number of processes to run at once (DEFAULT: 24).
+    -p, --procs     Number of processes to run at once (DEFAULT: 24).
     -N, --NOCALL    Don't report NOCALL or FAIL Fusions.
     -r, --raw       Raw output rather that pretty printed file.
     -o, --output    Write output to file.
@@ -56,7 +56,7 @@ GetOptions(
     "output|o=s"    => \$outfile,
     "raw|r"         => \$raw_output,
     "NOCALL|N"      => \$nocall,
-    "forks|f=i"     => \$num_procs,
+    "procs|p=i"     => \$num_procs,
     "help|h"        => \$help,
     "version|v"     => \$ver_info,
 );
