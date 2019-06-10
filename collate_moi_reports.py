@@ -15,20 +15,21 @@ import os
 import re
 import subprocess
 import argparse
+import multiprocessing
+
 from termcolor import colored
 from natsort import natsorted
 from collections import defaultdict
 from pprint import pprint as pp # noqa
 from multiprocessing.pool import ThreadPool # noqa
 
-from multiprocessing import Pool # noqa
-
-version = '4.1.053119'
+version = '4.2.061019'
 debug = False
+
 
 def get_args():
     # Default thresholds. Put them here rather than fishing below.
-    num_procs = 24
+    num_procs = multiprocessing.cpu_count() - 1
     cn = 7
     cu = None
     cl = None
@@ -116,8 +117,8 @@ def get_args():
     if any(x for x in (args.cu, args.cl)):
         args.cn = None
         if not all(x for x in (args.cu, args.cl)):
-            sys.stderr.write("ERROR: you must indicate both a 5% *and* 95% CI value when using "
-                "the --cu and --cl option.\n")
+            sys.stderr.write("ERROR: you must indicate both a 5% *and* 95% CI "
+                "value when using the --cu and --cl option.\n")
             sys.exit(1)
 
     global quiet
@@ -137,8 +138,8 @@ def get_names(string):
 
 def parse_cnv_params(cu, cl, cn):
     '''
-    Since CNV params are a bit difficult to work with, create a better, standardized 
-    list to pass into functions below
+    Since CNV params are a bit difficult to work with, create a better, 
+    standardized list to pass into functions below
     '''
     params_list = []
     params = {
@@ -175,8 +176,8 @@ def pad_list(data_list, data_type):
 
 def get_location(pos, vcf):
     """
-    For the cases where we need location information, like Protein Painter, re-read
-    the VCF in vcfExtractor, and get the location for the output.
+    For the cases where we need location information, like Protein Painter,
+    re-read the VCF in vcfExtractor, and get the location for the output.
     """
     cmd = ['vcfExtractor.pl', '-N', '-n', '-a', '-p', pos, vcf]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
@@ -294,8 +295,8 @@ def proc_vcfs(vcf_files, params, num_procs):
         for v in vcf_files:
             moi_data[v] = gen_moi_report(v, params, 'single')
     else:
-        sys.stderr.write("Parallel processing files (total: %s VCF(s))\n" %
-                str(len(vcf_files)))
+        sys.stderr.write("Parallel processing files using %s processes (total: "
+            "%s VCF(s))\n" % (num_procs, str(len(vcf_files))))
         task_list = [(v, params, 'threaded') for v in vcf_files]
         
         pool = ThreadPool(num_procs)
@@ -311,8 +312,9 @@ def proc_vcfs(vcf_files, params, num_procs):
             pool.join()
             sys.exit(9)
 
-    pool.close()
-    pool.join()
+        # TODO: Not sure if this is needed or not....seem to have a memory leak!
+        pool.close()
+        pool.join()
     return moi_data
 
 def main(vcfs, cn, cu, cl, reads, pedmatch, blood, output, num_procs, quiet):
