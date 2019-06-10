@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # Program to read OCAv3 VCF and perform a control summary analysis.  Requires 
 # having an OCAv3 fusion panel JSON derived from the panel BED file (generally 
 # using rna_panel_2_json.py), which is not freely distributed at this time.

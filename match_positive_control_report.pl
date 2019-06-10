@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # Script to read in one or more VCF files from a MATCH Control run and output a
 # report.  Eventually I'll link this with R so that we can generate a nice box
 # and whisker plot

@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # Get expression control data from IR Fusion output
 use warnings;
 use strict;
