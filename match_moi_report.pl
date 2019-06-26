@@ -18,7 +18,7 @@ use Text::CSV;
 use List::Util qw(max);
 
 my $scriptname = basename($0);
-my $version = "v5.21.053119-dev";
+my $version = "v5.22.062619-dev";
 
 # Remove when in prod.
 #print "\n";
@@ -525,7 +525,7 @@ sub gen_report {
             'Transcript'           => '%-16s',
             'CDS'                  => "%-${cdswidth}s",
             'Protein'              => "%-${aawidth}s",
-            'Exon'                 => "%-6s",
+            'Exon'                 => "%-8s",
             'Function'             => "%-${funcwidth}s",
             'oncomineVariantClass' => '%-21s',
             'FunctionalRule'       => '%s',
