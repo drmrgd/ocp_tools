@@ -18,7 +18,7 @@ use Text::CSV;
 use List::Util qw(max);
 
 my $scriptname = basename($0);
-my $version = "v5.22.062619-dev";
+my $version = "v5.22.062619";
 
 # Remove when in prod.
 #print "\n";

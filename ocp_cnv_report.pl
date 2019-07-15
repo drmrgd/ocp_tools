@@ -17,7 +17,7 @@ use Term::ANSIColor;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v3.4.053119-dev";
+my $version = "v3.4.053119";
 
 # Remove when in prod.
 #print "\n";
@@ -90,7 +90,7 @@ GetOptions( "novel|n"             => \$novel,
             "format|f=s"          => \$format,
             "raw|r"               => \$raw_output,
             "NOCALL|N"            => \$nocall,
-            "procs|p=i"       => \$num_procs,
+            "procs|p=i"           => \$num_procs,
             "version|v"           => \$ver_info,
             "help|h"              => \$help )
         or die $usage;
@@ -245,8 +245,8 @@ sub print_results {
     my ($data, $delimiter) = @_;
     my @header = qw( Chr Gene Start End Length Tiles Raw_CN Ref_CN CI_05 CI_95
         CN Annot );
-    my $pp_format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s 
-        %-18s\n";
+    my $pp_format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s " .
+        "%-8s %-18s\n";
 
     select $out_fh;
 

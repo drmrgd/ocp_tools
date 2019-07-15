@@ -5,7 +5,7 @@
 # complete report.
 #
 # 6/9/2014 - D Sims
-#######################################################################################################
+################################################################################
 use warnings;
 use strict;
 use autodie;
@@ -17,7 +17,7 @@ use Data::Dump;
 use Sort::Versions;
 
 my $scriptname = basename($0);
-my $version = "v4.1.053119-dev";
+my $version = "v4.1.053119";
 my $description = <<"EOT";
 Print out a summary table of fusions detected by the OCP Fusion Workflow VCF 
 files. Can choose to output anything seen, or just limit to annotated fusions.
@@ -28,7 +28,8 @@ USAGE: $scriptname [options] <vcf_file(s)>
     -R, --Ref       Include reference variants too (DEFAULT: OFF).
     -n, --novel     Include 'Non-Targeted' fusions in the output (DEFAULT: OFF).
     -t, --threshold Only report fusions above this threshold (DEFAULT: 25).
-    -g, --gene      Only output data for a specific driver gene or genes separated by a comma. 
+    -g, --gene      Only output data for a specific driver gene or genes 
+                    separated by a comma. 
     -p, --procs     Number of processes to run at once (DEFAULT: 24).
     -N, --NOCALL    Don't report NOCALL or FAIL Fusions.
     -r, --raw       Raw output rather that pretty printed file.
